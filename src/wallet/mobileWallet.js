@@ -447,11 +447,15 @@ async function connectBinanceMobile() {
 }
 
 async function connectTrustWalletMobile() {
+  console.log("[TRUST DEBUG] connectTrustWalletMobile START", Date.now());
+
   if (!projectId) {
     throw new Error(
       "VITE_WALLETCONNECT_PROJECT_ID is not configured."
     );
   }
+
+  console.log("[TRUST DEBUG] before EthereumProvider.init", Date.now());
 
   const provider = await EthereumProvider.init({
     projectId,
@@ -469,9 +473,12 @@ async function connectTrustWalletMobile() {
     disableProviderPing: true,
   });
 
+  console.log("[TRUST DEBUG] EthereumProvider.init DONE", Date.now());
+
   let openedTrust = false;
 
   provider.on("display_uri", (uri) => {
+    console.log("[TRUST DEBUG] display_uri", Date.now());
     if (openedTrust) return;
     openedTrust = true;
 
@@ -482,9 +489,13 @@ async function connectTrustWalletMobile() {
     window.location.href = trustUrl;
   });
 
+  console.log("[TRUST DEBUG] before provider.connect", Date.now());
+
   await provider.connect({
     chains: [BSC_CHAIN_ID],
   });
+
+  console.log("[TRUST DEBUG] provider.connect DONE", Date.now());
 
   let accounts = await provider.request({
     method: "eth_accounts",
