@@ -486,7 +486,7 @@ async function connectBinanceMobile() {
   );
 }
 
-async function connectTrustWalletMobile(trustWindow = null) {
+async function connectTrustWalletMobile() {
 
   if (!projectId) {
     throw new Error(
@@ -502,21 +502,28 @@ async function connectTrustWalletMobile(trustWindow = null) {
     if (openedTrust) return;
     openedTrust = true;
 
-    const trustUrl =
+    const trustUri =
+      "trust://wc?uri=" +
+      encodeURIComponent(uri);
+
+    const trustWebUrl =
       "https://link.trustwallet.com/wc?uri=" +
       encodeURIComponent(uri);
 
-    if (
-      trustWindow &&
-      !trustWindow.closed
-    ) {
-      try {
-        trustWindow.location.href = trustUrl;
-        return;
-      } catch {}
-    }
+    // Trust Wallet direct app deep-link.
+    window.location.href = trustUri;
 
-    window.location.href = trustUrl;
+    // Fallback to Trust's official universal link
+    // if the browser does not handle the trust:// scheme.
+    setTimeout(() => {
+      if (!document.hidden) {
+        window.open(
+          trustWebUrl,
+          "_blank",
+          "noreferrer,noopener"
+        );
+      }
+    }, 1200);
   });
 
   await provider.connect({
@@ -1071,9 +1078,7 @@ export async function connectSpecificMobileWallet(walletId) {
   }
 
   if (walletId === "trust") {
-    return connectTrustWalletMobile(
-      arguments.length > 1 ? arguments[1] : null
-    );
+    return connectTrustWalletMobile();
   }
 
   if (walletId === "rabby") {

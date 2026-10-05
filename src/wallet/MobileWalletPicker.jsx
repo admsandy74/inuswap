@@ -49,25 +49,8 @@ export default function MobileWalletPicker({
       setError("");
       setConnecting(true);
 
-      let trustWindow = null;
-
-      if (
-        wallet.id === "trust" &&
-        typeof window !== "undefined"
-      ) {
-        try {
-          trustWindow = window.open(
-            "about:blank",
-            "_blank"
-          );
-        } catch {}
-      }
-
       const result =
-        await connectSpecificMobileWallet(
-          wallet.id,
-          trustWindow
-        );
+        await connectSpecificMobileWallet(wallet.id);
 
       if (!result?.address || !result?.provider) {
         throw new Error(
