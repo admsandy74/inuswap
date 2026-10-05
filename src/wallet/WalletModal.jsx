@@ -39,15 +39,35 @@ export default function WalletModal({
 
     setError("");
 
-    const refreshWallets = () => {
-      setWallets(getInjectedWallets());
+    const refreshWallets = async () => {
+      const detected = getInjectedWallets();
+      setWallets(detected);
+
+      const provider =
+        getActiveWalletProvider();
+
+      if (provider) {
+        try {
+          const accounts =
+            await provider.request({
+              method: "eth_accounts",
+            });
+
+          const address =
+            accounts?.[0] ?? null;
+
+          if (address) {
+            setConnectedAddress(address);
+          }
+        } catch {}
+      }
     };
 
     refreshWallets();
 
     const timer = setTimeout(
       refreshWallets,
-      200
+      300
     );
 
     return () => {
@@ -131,6 +151,17 @@ export default function WalletModal({
         setActiveWalletProvider(provider);
         setConnectedAddress(address);
 
+        try {
+          localStorage.setItem(
+            "inuswap.wallet",
+            JSON.stringify({
+              type: "injected",
+              walletId: wallet.id,
+              address,
+            })
+          );
+        } catch {}
+
         const chainId = await getWalletChainId(provider);
 
         if (onConnected) {
@@ -171,6 +202,16 @@ export default function WalletModal({
         setActiveWalletProvider(result.provider);
         setConnectedAddress(result.address);
 
+        try {
+          localStorage.setItem(
+            "inuswap.wallet",
+            JSON.stringify({
+              type: result.walletType || "reown",
+              address: result.address,
+            })
+          );
+        } catch {}
+
         if (onConnected) {
           onConnected(
             result.address,
@@ -209,6 +250,12 @@ export default function WalletModal({
     activeProviderRef.current = null;
     mobileWalletRef.current = false;
     clearActiveWalletProvider();
+
+    try {
+      localStorage.removeItem(
+        "inuswap.wallet"
+      );
+    } catch {}
 
     if (onConnected) {
       onConnected(null);

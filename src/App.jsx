@@ -8,7 +8,14 @@ import {
   getWalletChainId,
   getWalletBalance,
   switchToBscChain,
+  discoverInjectedWallets,
+  getInjectedWallets,
+  setActiveWalletProvider,
 } from "./wallet/wallet";
+
+import {
+  restoreMobileWalletSession,
+} from "./wallet/mobileWallet";
 
 import {
   BSC_CHAIN_ID,
@@ -66,8 +73,79 @@ export default function App() {
 
   async function refreshWallet() {
     try {
-      const provider =
+      let provider =
         getActiveWalletProvider();
+
+      // Restore the wallet provider after browser refresh.
+      if (!provider) {
+        let saved = null;
+
+        try {
+          saved = JSON.parse(
+            localStorage.getItem("inuswap.wallet") ||
+              "null"
+          );
+        } catch {}
+
+        if (saved?.address) {
+          if (
+            saved.type &&
+            saved.type !== "injected"
+          ) {
+            try {
+              const restored =
+                await restoreMobileWalletSession(
+                  saved.type,
+                  saved.address
+                );
+
+              if (restored?.provider) {
+                provider = restored.provider;
+                setActiveWalletProvider(
+                  restored.provider
+                );
+              }
+            } catch (error) {
+              console.warn(
+                "[INUSWAP] mobile wallet restore failed:",
+                error?.message || error
+              );
+            }
+          }
+
+          // Restore normal browser extension wallets.
+          if (!provider) {
+            discoverInjectedWallets();
+
+            const wallets =
+              getInjectedWallets();
+
+            for (const wallet of wallets) {
+              try {
+                const accounts =
+                  await wallet.provider.request({
+                    method: "eth_accounts",
+                  });
+
+                const match =
+                  accounts?.find(
+                    (account) =>
+                      String(account).toLowerCase() ===
+                      String(saved.address).toLowerCase()
+                  );
+
+                if (match) {
+                  provider = wallet.provider;
+                  setActiveWalletProvider(
+                    wallet.provider
+                  );
+                  break;
+                }
+              } catch {}
+            }
+          }
+        }
+      }
 
       if (!provider) {
         setAccount(null);
@@ -84,24 +162,33 @@ export default function App() {
       const address =
         accounts?.[0] || null;
 
+      if (!address) {
+        setAccount(null);
+        setBalance(null);
+        setChainId(null);
+        return;
+      }
+
       setAccount(address);
 
       const currentChain =
         await getWalletChainId(provider);
 
       setChainId(
-        Number(currentChain)
+        Number(
+          String(currentChain).startsWith("0x")
+            ? parseInt(currentChain, 16)
+            : currentChain
+        )
       );
 
-      if (address) {
-        const bnb =
-          await getWalletBalance(
-            provider,
-            address
-          );
+      const bnb =
+        await getWalletBalance(
+          provider,
+          address
+        );
 
-        setBalance(bnb);
-      }
+      setBalance(bnb);
     } catch (error) {
       console.warn(
         "[INUSWAP] wallet refresh failed:",
