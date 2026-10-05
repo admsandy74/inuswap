@@ -486,7 +486,7 @@ async function connectBinanceMobile() {
   );
 }
 
-async function connectTrustWalletMobile() {
+async function connectTrustWalletMobile(trustWindow = null) {
 
   if (!projectId) {
     throw new Error(
@@ -505,6 +505,16 @@ async function connectTrustWalletMobile() {
     const trustUrl =
       "https://link.trustwallet.com/wc?uri=" +
       encodeURIComponent(uri);
+
+    if (
+      trustWindow &&
+      !trustWindow.closed
+    ) {
+      try {
+        trustWindow.location.href = trustUrl;
+        return;
+      } catch {}
+    }
 
     window.location.href = trustUrl;
   });
@@ -1061,7 +1071,9 @@ export async function connectSpecificMobileWallet(walletId) {
   }
 
   if (walletId === "trust") {
-    return connectTrustWalletMobile();
+    return connectTrustWalletMobile(
+      arguments.length > 1 ? arguments[1] : null
+    );
   }
 
   if (walletId === "rabby") {
