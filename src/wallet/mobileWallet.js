@@ -57,10 +57,6 @@ function createTrustProvider() {
   return trustProviderPromise;
 }
 
-export function warmupTrustWallet() {
-  if (!projectId) return;
-  void createTrustProvider().catch(() => {});
-}
 
 let metamaskClient;
 
@@ -487,14 +483,27 @@ async function connectBinanceMobile() {
 }
 
 async function connectTrustWalletMobile() {
-
   if (!projectId) {
     throw new Error(
       "VITE_WALLETCONNECT_PROJECT_ID is not configured."
     );
   }
 
-  const provider = await createTrustProvider();
+  const provider = await EthereumProvider.init({
+    projectId,
+    chains: [BSC_CHAIN_ID],
+    rpcMap: {
+      [BSC_CHAIN_ID]: BSC_RPC,
+    },
+    showQrModal: false,
+    metadata: {
+      name: "INUSWAP",
+      description: "INUSWAP",
+      url: "https://inuswap.vercel.app",
+      icons: ["https://inuswap.vercel.app/favicon.ico"],
+    },
+    disableProviderPing: true,
+  });
 
   let openedTrust = false;
 
@@ -502,28 +511,11 @@ async function connectTrustWalletMobile() {
     if (openedTrust) return;
     openedTrust = true;
 
-    const trustUri =
-      "trust://wc?uri=" +
-      encodeURIComponent(uri);
-
-    const trustWebUrl =
+    const trustUrl =
       "https://link.trustwallet.com/wc?uri=" +
       encodeURIComponent(uri);
 
-    // Trust Wallet direct app deep-link.
-    window.location.href = trustUri;
-
-    // Fallback to Trust's official universal link
-    // if the browser does not handle the trust:// scheme.
-    setTimeout(() => {
-      if (!document.hidden) {
-        window.open(
-          trustWebUrl,
-          "_blank",
-          "noreferrer,noopener"
-        );
-      }
-    }, 1200);
+    window.location.href = trustUrl;
   });
 
   await provider.connect({
@@ -558,7 +550,10 @@ async function connectTrustWalletMobile() {
     method: "eth_chainId",
   });
 
-  if (String(chainIdHex).toLowerCase() !== BSC_CHAIN_ID_HEX) {
+  if (
+    String(chainIdHex).toLowerCase() !==
+    BSC_CHAIN_ID_HEX
+  ) {
     try {
       await provider.request({
         method: "wallet_switchEthereumChain",
