@@ -17,6 +17,16 @@ import {
 import MobileWalletPicker from "./MobileWalletPicker";
 import "./wallet.css";
 
+function isMobileDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(
+    navigator.userAgent || ""
+  );
+}
+
 export default function WalletModal({
   onClose,
   onConnected,
@@ -266,6 +276,15 @@ export default function WalletModal({
         onClose={() =>
           setMobilePickerOpen(false)
         }
+      />
+    );
+  }
+
+  if (isMobileDevice()) {
+    return (
+      <MobileWalletPicker
+        onConnected={handleMobilePickerConnected}
+        onClose={onClose}
       />
     );
   }
