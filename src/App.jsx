@@ -1,0 +1,339 @@
+import { useEffect, useState } from "react";
+
+import WalletModal from "./wallet/WalletModal";
+import SwapPage from "./swap/SwapPage";
+
+import {
+  getActiveWalletProvider,
+  getWalletChainId,
+  getWalletBalance,
+} from "./wallet/wallet";
+
+import {
+  BSC_CHAIN_ID,
+} from "./config/bsc";
+
+import {
+  INU_TOKEN_ADDRESS,
+  INU_TOKEN_IS_LIVE,
+} from "./config/inu";
+
+import "./index.css";
+import "./App.css";
+
+function shortenAddress(address) {
+  if (!address) return "";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function Logo() {
+  return (
+    <a className="inu-logo" href="/">
+      <span className="inu-logo-mark">INU</span>
+      <span className="inu-logo-text">
+        INUSWAP
+      </span>
+    </a>
+  );
+}
+
+export default function App() {
+  const [walletOpen, setWalletOpen] =
+    useState(false);
+
+  const [account, setAccount] =
+    useState(null);
+
+  const [balance, setBalance] =
+    useState(null);
+
+  const [chainId, setChainId] =
+    useState(null);
+
+  const [page, setPage] =
+    useState(
+      window.location.pathname === "/swap"
+        ? "swap"
+        : "home"
+    );
+
+  async function refreshWallet() {
+    try {
+      const provider =
+        getActiveWalletProvider();
+
+      if (!provider) {
+        setAccount(null);
+        setBalance(null);
+        setChainId(null);
+        return;
+      }
+
+      const accounts =
+        await provider.request({
+          method: "eth_accounts",
+        });
+
+      const address =
+        accounts?.[0] || null;
+
+      setAccount(address);
+
+      const currentChain =
+        await getWalletChainId(provider);
+
+      setChainId(
+        Number(currentChain)
+      );
+
+      if (address) {
+        const bnb =
+          await getWalletBalance(
+            provider,
+            address
+          );
+
+        setBalance(bnb);
+      }
+    } catch (error) {
+      console.warn(
+        "[INUSWAP] wallet refresh failed:",
+        error?.message || error
+      );
+    }
+  }
+
+  useEffect(() => {
+    refreshWallet();
+
+    const onPopState = () => {
+      setPage(
+        window.location.pathname === "/swap"
+          ? "swap"
+          : "home"
+      );
+    };
+
+    window.addEventListener(
+      "popstate",
+      onPopState
+    );
+
+    return () => {
+      window.removeEventListener(
+        "popstate",
+        onPopState
+      );
+    };
+  }, []);
+
+  function navigate(path) {
+    window.history.pushState(
+      {},
+      "",
+      path
+    );
+
+    setPage(
+      path === "/swap"
+        ? "swap"
+        : "home"
+    );
+  }
+
+  function handleWalletConnected() {
+    setWalletOpen(false);
+
+    setTimeout(() => {
+      refreshWallet();
+    }, 250);
+  }
+
+  const wrongNetwork =
+    account &&
+    chainId &&
+    Number(chainId) !==
+      BSC_CHAIN_ID;
+
+  return (
+    <div className="inu-app">
+
+      <header className="inu-nav">
+        <Logo />
+
+        <nav className="inu-nav-links">
+          <button
+            type="button"
+            className={
+              page === "swap"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              navigate("/swap")
+            }
+          >
+            Swap
+          </button>
+
+          <a
+            href="https://bscscan.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            BscScan ↗
+          </a>
+        </nav>
+
+        <button
+          className="inu-connect"
+          type="button"
+          onClick={() =>
+            setWalletOpen(true)
+          }
+        >
+          {account
+            ? shortenAddress(account)
+            : "Connect Wallet"}
+        </button>
+      </header>
+
+      {wrongNetwork && (
+        <div className="inu-network-warning">
+          Please switch your wallet to
+          <strong> BNB Smart Chain</strong>.
+        </div>
+      )}
+
+      {page === "home" ? (
+        <main className="inu-home">
+
+          <section className="inu-hero">
+
+            <div className="inu-badge">
+              <span />
+              BNB SMART CHAIN
+            </div>
+
+            <h1>
+              MAKE INU
+              <br />
+              <strong>GREAT AGAIN.</strong>
+            </h1>
+
+            <p>
+              A simple decentralized exchange
+              built for the Inu community.
+            </p>
+
+            <div className="inu-hero-actions">
+              <button
+                type="button"
+                onClick={() =>
+                  navigate("/swap")
+                }
+                className="inu-primary"
+              >
+                Launch Swap
+              </button>
+
+              <button
+                type="button"
+                className="inu-secondary"
+                onClick={() =>
+                  setWalletOpen(true)
+                }
+              >
+                {account
+                  ? shortenAddress(account)
+                  : "Connect Wallet"}
+              </button>
+            </div>
+
+          </section>
+
+          <section className="inu-stats">
+
+            <div>
+              <span>NETWORK</span>
+              <strong>BNB Chain</strong>
+            </div>
+
+            <div>
+              <span>ASSET</span>
+              <strong>INU</strong>
+            </div>
+
+            <div>
+              <span>STATUS</span>
+              <strong>
+                {INU_TOKEN_IS_LIVE
+                  ? "LIVE"
+                  : "COMING SOON"}
+              </strong>
+            </div>
+
+          </section>
+
+          <section className="inu-ca-section">
+
+            <div>
+              <span>INU CONTRACT</span>
+
+              <code>
+                {INU_TOKEN_ADDRESS}
+              </code>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                navigator.clipboard.writeText(
+                  INU_TOKEN_ADDRESS
+                )
+              }
+            >
+              Copy CA
+            </button>
+
+          </section>
+
+          <section className="inu-tagline">
+            <span>
+              MAKE INU GREAT AGAIN.
+            </span>
+
+            <p>
+              Connect. Swap. Inu.
+            </p>
+          </section>
+
+        </main>
+      ) : (
+        <SwapPage />
+      )}
+
+      <footer className="inu-footer">
+        <span>
+          INUSWAP
+        </span>
+
+        <span>
+          Make Inu Great Again.
+        </span>
+      </footer>
+
+      {walletOpen && (
+        <WalletModal
+          onClose={() =>
+            setWalletOpen(false)
+          }
+          onConnected={
+            handleWalletConnected
+          }
+        />
+      )}
+
+    </div>
+  );
+}

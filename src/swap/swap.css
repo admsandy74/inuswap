@@ -1,0 +1,259 @@
+.inu-swap-page {
+  min-height: calc(100vh - 82px);
+  padding: 70px 20px 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.inu-swap-card {
+  width: min(470px, 100%);
+  padding: 22px;
+  border: 1px solid rgba(240,185,11,.16);
+  border-radius: 20px;
+  background: rgba(15,15,15,.92);
+  box-shadow:
+    0 30px 100px rgba(0,0,0,.35),
+    inset 0 1px rgba(255,255,255,.025);
+}
+
+.swap-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.swap-eyebrow {
+  color: #777;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .15em;
+}
+
+.swap-top h1 {
+  margin: 6px 0 0;
+  font-size: 28px;
+  letter-spacing: -.04em;
+}
+
+.swap-network {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid rgba(240,185,11,.18);
+  border-radius: 8px;
+  color: #f0b90b;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.swap-network span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f0b90b;
+  box-shadow: 0 0 7px #f0b90b;
+}
+
+.inu-coming-soon {
+  margin-bottom: 14px;
+  padding: 13px;
+  border: 1px solid rgba(240,185,11,.18);
+  border-radius: 11px;
+  background: rgba(240,185,11,.05);
+}
+
+.inu-coming-soon strong {
+  display: block;
+  color: #f0b90b;
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.inu-coming-soon span {
+  display: block;
+  margin-top: 4px;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.swap-box {
+  padding: 15px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px;
+  background: #121212;
+}
+
+.swap-box-head {
+  display: flex;
+  justify-content: space-between;
+  color: #6f6f6f;
+  font-size: 10px;
+}
+
+.swap-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+}
+
+.swap-input-row input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: white;
+  font-size: 29px;
+  font-weight: 600;
+}
+
+.swap-input-row input::placeholder {
+  color: #444;
+}
+
+.token-pill {
+  flex: 0 0 auto;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #202020;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.swap-direction {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: -2px auto;
+  border: 4px solid #0f0f0f;
+  border-radius: 10px;
+  background: #202020;
+  color: #f0b90b;
+  z-index: 2;
+}
+
+.swap-rate,
+.swap-settings {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 13px;
+  color: #666;
+  font-size: 10px;
+}
+
+.swap-rate span:last-child {
+  color: #aaa;
+}
+
+.slippage-options {
+  display: flex;
+  gap: 5px;
+}
+
+.slippage-options button {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 6px;
+  background: #151515;
+  color: #777;
+  padding: 5px 8px;
+  font-size: 9px;
+}
+
+.slippage-options button.selected {
+  border-color: rgba(240,185,11,.3);
+  background: rgba(240,185,11,.08);
+  color: #f0b90b;
+}
+
+.inu-swap-btn {
+  width: 100%;
+  height: 52px;
+  margin-top: 20px;
+  border: 0;
+  border-radius: 11px;
+  background: #f0b90b;
+  color: #080808;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.inu-swap-btn:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.swap-message {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #171717;
+  color: #888;
+  font-size: 10px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.inu-ca-box {
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.inu-ca-box span {
+  display: block;
+  margin-bottom: 5px;
+  color: #555;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.inu-ca-box code {
+  color: #888;
+  font-size: 8px;
+  word-break: break-all;
+}
+
+.inu-copy {
+  flex: 0 0 auto;
+  border: 1px solid rgba(240,185,11,.18);
+  border-radius: 7px;
+  background: rgba(240,185,11,.05);
+  color: #f0b90b;
+  padding: 7px 9px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.swap-footer-note {
+  margin: 15px 0 0;
+  color: #4e4e4e;
+  font-size: 9px;
+}
+
+@media (max-width: 500px) {
+  .inu-swap-page {
+    padding: 35px 12px 70px;
+  }
+
+  .inu-swap-card {
+    padding: 15px;
+    border-radius: 16px;
+  }
+
+  .swap-input-row input {
+    font-size: 24px;
+  }
+}

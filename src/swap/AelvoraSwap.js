@@ -1,0 +1,3591 @@
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  parseAbi,
+  parseAbiItem,
+  encodeFunctionData,
+  formatEther,
+  formatUnits,
+  isAddress,
+} from "viem";
+
+export const ROBINHOOD_CHAIN_ID = 0x1237;
+
+export const ROBINHOOD_CHAIN = {
+  id: ROBINHOOD_CHAIN_ID,
+  name: "Robinhood",
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://rpc.mainnet.chain.robinhood.com"],
+    },
+  },
+};
+
+export const FACTORY_ADDRESS =
+  "0x731197c3cF5A5B7100feb86e6C4B730276a7c727";
+
+export const V4_POOL_MANAGER =
+  "0x8366a39CC670B4001A1121B8F6A443A643e40951";
+
+export const V4_QUOTER =
+  "0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94";
+
+export const V4_STATE_VIEW =
+  "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b";
+
+/*
+ * Robinhood Chain Universal Router.
+ *
+ * IMPORTANT:
+ * Robinhood's Universal Router V4 encoding differs from
+ * vanilla Uniswap Router encoding. Do not use the old
+ * AELVORA-only router for external/global pools.
+ */
+export const UNIVERSAL_ROUTER =
+  "0x8876789976DECBFcbBBe364623C63652db8C0904";
+
+export const PERMIT2 =
+  "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+
+export const AELVORA_SWAP_ROUTER =
+  "0x698e944AC6190b00563871b9760664dD6FE3e4fb";
+
+export const V3_FACTORY =
+  "0x1f7d7550b1b028f7571e69a784071f0205fd2efa";
+
+export const V3_QUOTER =
+  "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7";
+
+export const V3_SWAP_ROUTER =
+  "0xcaf681a66d020601342297493863e78c959e5cb2";
+
+export const WETH9 =
+  "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73";
+
+export const SWAP_FEE_BPS = 10n;
+export const BPS = 10_000n;
+export const DEFAULT_SLIPPAGE_BPS = 2000n;
+
+export const ZERO_ADDRESS =
+  "0x0000000000000000000000000000000000000000";
+
+export const FACTORY_ABI = parseAbi([
+  "function curveOf(address token) view returns (address)",
+]);
+
+export const CURVE_ABI = parseAbi([
+  "function priceData() view returns (uint256 currentEthReserve, uint256 currentTokenReserve, uint256 volumeEth, bool isGraduated)",
+  "function quoteBuy(uint256 ethGross) view returns (uint256 tokensOut, uint256 platformFee, uint256 creatorFee, uint256 ethToCurve)",
+  "function quoteSell(uint256 tokenAmount) view returns (uint256 ethGross, uint256 platformFee, uint256 creatorFee, uint256 ethToSeller)",
+  "function token() view returns (address)",
+  "function buy() payable returns (uint256 tokensOut)",
+  "function sell(uint256 tokenAmount) returns (uint256 ethToSeller)",
+  "event Bought(address indexed buyer,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToCurve,uint256 tokensOut)",
+  "event Sold(address indexed seller,uint256 tokensIn,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToSeller)",
+]);
+
+export const TOKEN_ABI = parseAbi([
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function approve(address spender,uint256 amount) returns (bool)",
+  "function allowance(address owner,address spender) view returns (uint256)",
+]);
+
+export const QUOTER_ABI = parseAbi([
+  "function quoteExactInputSingle(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 exactAmount,bytes hookData) params) returns (uint256 amountOut,uint256 gasEstimate)",
+]);
+
+export const V4_STATE_VIEW_ABI = parseAbi([
+  "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96,int24 tick,uint24 protocolFee,uint24 lpFee)",
+  "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
+]);
+
+export const V4_INITIALIZE_EVENT = parseAbiItem(
+  "event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)"
+);
+
+export const ROUTER_ABI = parseAbi([
+  "function swapExactETHForTokens((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 amountOutMinimum,address recipient) payable",
+  "function swapExactTokensForTokens((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 amountInGross,uint128 amountOutMinimum,address recipient)",
+]);
+
+export const V3_FACTORY_ABI = parseAbi([
+  "function getPool(address tokenA,address tokenB,uint24 fee) view returns (address pool)",
+]);
+
+export const V3_QUOTER_ABI = parseAbi([
+  "function quoteExactInputSingle((address tokenIn,address tokenOut,uint256 amountIn,uint24 fee,uint160 sqrtPriceLimitX96) params) returns (uint256 amountOut,uint160 sqrtPriceX96After,uint32 initializedTicksCrossed,uint256 gasEstimate)",
+]);
+
+export const V3_ROUTER_ABI = parseAbi([
+  "function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+  "function multicall(bytes[] data) payable returns (bytes[] results)",
+  "function wrapETH(uint256 value) payable",
+  "function unwrapWETH9(uint256 amountMinimum,address recipient) payable",
+  "function pull(address token,uint256 value) payable",
+]);
+
+export const publicClient = createPublicClient({
+  chain: ROBINHOOD_CHAIN,
+  transport: http("https://aelvoramarket.com/rpc"),
+});
+
+export function getWalletClient(provider) {
+  if (!provider) {
+    throw new Error("Wallet provider is not available.");
+  }
+
+  return createWalletClient({
+    chain: ROBINHOOD_CHAIN,
+    transport: custom(provider),
+  });
+}
+
+export function calculateCurvePrice(ethReserve, tokenReserve) {
+  if (tokenReserve === 0n) return 0;
+
+  const effectiveEthReserve =
+    ethReserve + 1_000_000_000_000_000_000n;
+
+  const SCALE = 1_000_000_000_000_000_000n;
+
+  return Number(
+    (effectiveEthReserve * SCALE) / tokenReserve
+  ) / 1e18;
+}
+
+export function buildV4PoolKey(tokenAddress, pool = {}) {
+  if (!isAddress(tokenAddress)) {
+    throw new Error("Invalid token contract address.");
+  }
+
+  return {
+    currency0:
+      pool.currency0 ||
+      ZERO_ADDRESS,
+    currency1:
+      pool.currency1 ||
+      tokenAddress,
+    fee:
+      Number(pool.fee ?? 3000),
+    tickSpacing:
+      Number(pool.tickSpacing ?? 60),
+    hooks:
+      pool.hooks ||
+      ZERO_ADDRESS,
+  };
+}
+
+/*
+ * Resolve the real V4 PoolKey from the PoolManager Initialize event.
+ *
+ * DexScreener's pairAddress for V4 is the bytes32 pool ID.
+ * The pool ID alone is NOT enough to safely construct a PoolKey.
+ */
+export async function resolveV4PoolKey(poolId) {
+  if (
+    typeof poolId !== "string" ||
+    !/^0x[a-fA-F0-9]{64}$/.test(poolId)
+  ) {
+    throw new Error("Invalid V4 pool ID.");
+  }
+
+  const logs = await publicClient.getLogs({
+    address: V4_POOL_MANAGER,
+    event: V4_INITIALIZE_EVENT,
+    args: {
+      id: poolId,
+    },
+    fromBlock: 0n,
+    toBlock: "latest",
+  });
+
+  if (!logs.length) {
+    throw new Error(`V4 pool initialization not found: ${poolId}`);
+  }
+
+  const args = logs[logs.length - 1].args;
+
+  return {
+    poolId,
+    currency0: args.currency0,
+    currency1: args.currency1,
+    fee: Number(args.fee),
+    tickSpacing: Number(args.tickSpacing),
+    hooks: args.hooks,
+    sqrtPriceX96: args.sqrtPriceX96,
+    tick: Number(args.tick),
+    blockNumber: logs[logs.length - 1].blockNumber,
+  };
+}
+
+/*
+ * Validate that a V4 pool is actually initialized.
+ * StateView is the correct read surface on Robinhood Chain.
+ */
+export async function validateV4Pool(poolKey) {
+  const encoded = {
+    ...poolKey,
+  };
+
+  const poolId = await publicClient.readContract({
+    address: V4_STATE_VIEW,
+    abi: V4_STATE_VIEW_ABI,
+    functionName: "getSlot0",
+    args: [
+      await computeV4PoolId(encoded),
+    ],
+  });
+
+  return poolId;
+}
+
+/*
+ * Compute PoolId exactly like Uniswap V4 PoolManager:
+ * keccak256(abi.encode(poolKey)).
+ *
+ * Kept isolated so route discovery can use the same identity
+ * as StateView/PoolManager.
+ */
+export async function computeV4PoolId(poolKey) {
+  const { keccak256, encodeAbiParameters } = await import("viem");
+
+  return keccak256(
+    encodeAbiParameters(
+      [
+        {
+          type: "tuple",
+          components: [
+            { name: "currency0", type: "address" },
+            { name: "currency1", type: "address" },
+            { name: "fee", type: "uint24" },
+            { name: "tickSpacing", type: "int24" },
+            { name: "hooks", type: "address" },
+          ],
+        },
+      ],
+      [poolKey]
+    )
+  );
+}
+
+
+export function calculateMinimumReceived(
+  amountOut,
+  slippageBps = DEFAULT_SLIPPAGE_BPS
+) {
+  const amount = BigInt(amountOut);
+  const slip = BigInt(slippageBps);
+
+  if (slip >= BPS) {
+    throw new Error("Invalid slippage setting.");
+  }
+
+  return (amount * (BPS - slip)) / BPS;
+}
+
+export function calculateV4RouterFee(grossAmount) {
+  const gross = BigInt(grossAmount);
+  return (gross * SWAP_FEE_BPS) / BPS;
+}
+
+export async function getAelvoraCurveChart(curveAddress, createdBlock = null) {
+  if (!isAddress(curveAddress)) {
+    throw new Error("Invalid bonding curve address.");
+  }
+
+  const latestBlock = await publicClient.getBlockNumber();
+
+  // Robinhood RPC has a limited eth_getLogs range.
+  // IMPORTANT: actually use the chunk size instead of requesting
+  // hundreds of thousands of blocks in one RPC call.
+  const BLOCK_CHUNK = 5000n;
+  const MAX_BLOCKS = 300000n;
+
+  let earliestBlock;
+
+  if (createdBlock != null && String(createdBlock).trim() !== "") {
+    try {
+      const creation = BigInt(createdBlock);
+      earliestBlock =
+        creation <= latestBlock ? creation : latestBlock;
+    } catch {
+      earliestBlock =
+        latestBlock > MAX_BLOCKS
+          ? latestBlock - MAX_BLOCKS
+          : 0n;
+    }
+  } else {
+    earliestBlock =
+      latestBlock > MAX_BLOCKS
+        ? latestBlock - MAX_BLOCKS
+        : 0n;
+  }
+
+  const boughtEvent = parseAbiItem(
+    "event Bought(address indexed buyer,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToCurve,uint256 tokensOut)"
+  );
+
+  const soldEvent = parseAbiItem(
+    "event Sold(address indexed seller,uint256 tokensIn,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToSeller)"
+  );
+
+  const boughtLogs = [];
+  const soldLogs = [];
+
+  // ----------------------------------------------------------
+  // CHUNKED BOUGHT LOGS
+  // ----------------------------------------------------------
+
+  // ----------------------------------------------------------
+  // PARALLEL CHUNKED BUY + SELL LOGS
+  // ----------------------------------------------------------
+
+  for (
+    let fromBlock = earliestBlock;
+    fromBlock <= latestBlock;
+    fromBlock += BLOCK_CHUNK
+  ) {
+    const toBlock =
+      fromBlock + BLOCK_CHUNK - 1n > latestBlock
+        ? latestBlock
+        : fromBlock + BLOCK_CHUNK - 1n;
+
+    const [boughtResult, soldResult] = await Promise.all([
+      publicClient.getLogs({
+        address: curveAddress,
+        event: boughtEvent,
+        fromBlock,
+        toBlock,
+      }).catch((error) => {
+        console.error(
+          "[AELVORA] Bought logs failed:",
+          fromBlock.toString(),
+          toBlock.toString(),
+          error
+        );
+        return [];
+      }),
+
+      publicClient.getLogs({
+        address: curveAddress,
+        event: soldEvent,
+        fromBlock,
+        toBlock,
+      }).catch((error) => {
+        console.error(
+          "[AELVORA] Sold logs failed:",
+          fromBlock.toString(),
+          toBlock.toString(),
+          error
+        );
+        return [];
+      }),
+    ]);
+
+    boughtLogs.push(...boughtResult);
+    soldLogs.push(...soldResult);
+  }
+
+  const logs = [
+    ...boughtLogs.map((log) => ({
+      type: "BUY",
+      blockNumber: log.blockNumber,
+      logIndex: log.logIndex,
+      ethAmount: log.args?.ethGross ?? 0n,
+      tokenAmount: log.args?.tokensOut ?? 0n,
+    })),
+
+    ...soldLogs.map((log) => ({
+      type: "SELL",
+      blockNumber: log.blockNumber,
+      logIndex: log.logIndex,
+      ethAmount: log.args?.ethGross ?? 0n,
+      tokenAmount: log.args?.tokensIn ?? 0n,
+    })),
+  ].sort((a, b) => {
+    if (a.blockNumber < b.blockNumber) return -1;
+    if (a.blockNumber > b.blockNumber) return 1;
+
+    return (
+      Number(a.logIndex ?? 0n) -
+      Number(b.logIndex ?? 0n)
+    );
+  });
+
+  console.log(
+    `[AELVORA] Curve chart logs: BUY=${boughtLogs.length} SELL=${soldLogs.length}`
+  );
+
+  // ----------------------------------------------------------
+  // BLOCK TIMESTAMP CACHE
+  // ----------------------------------------------------------
+
+  const timestampCache = new Map();
+
+  const getTimestamp = async (blockNumber) => {
+    const key = blockNumber.toString();
+
+    if (timestampCache.has(key)) {
+      return timestampCache.get(key);
+    }
+
+    const block = await publicClient.getBlock({
+      blockNumber,
+    });
+
+    const timestamp = Number(block.timestamp);
+
+    timestampCache.set(key, timestamp);
+
+    return timestamp;
+  };
+
+  const points = [];
+
+  // ----------------------------------------------------------
+  // REAL TRADE PRICES
+  // ----------------------------------------------------------
+
+  for (const item of logs) {
+    try {
+      const ethAmount = BigInt(item.ethAmount || 0n);
+      const tokenAmount = BigInt(item.tokenAmount || 0n);
+
+      if (
+        ethAmount <= 0n ||
+        tokenAmount <= 0n
+      ) {
+        continue;
+      }
+
+      const timestamp = await getTimestamp(
+        item.blockNumber
+      );
+
+      // Aelvora ERC20 uses 18 decimals.
+      const eth = Number(
+        formatEther(ethAmount)
+      );
+
+      const tokens = Number(
+        formatUnits(tokenAmount, 18)
+      );
+
+      if (
+        !Number.isFinite(eth) ||
+        !Number.isFinite(tokens) ||
+        eth <= 0 ||
+        tokens <= 0
+      ) {
+        continue;
+      }
+
+      const price = eth / tokens;
+
+      if (
+        !Number.isFinite(price) ||
+        price <= 0
+      ) {
+        continue;
+      }
+
+      points.push({
+        type: item.type,
+        blockNumber: item.blockNumber.toString(),
+        logIndex: Number(item.logIndex ?? 0n),
+        timestamp,
+        price,
+      });
+    } catch (error) {
+      console.warn(
+        "[AELVORA] Chart point failed:",
+        error
+      );
+    }
+  }
+
+  // ----------------------------------------------------------
+  // CURRENT CURVE PRICE
+  //
+  // Always append the latest bonding-curve price.
+  // This gives a newly created token a live chart point
+  // even when it only has one or zero trade events.
+  // ----------------------------------------------------------
+
+  try {
+    const priceData =
+      await publicClient.readContract({
+        address: curveAddress,
+        abi: CURVE_ABI,
+        functionName: "priceData",
+      });
+
+    const [
+      currentEthReserve,
+      currentTokenReserve,
+    ] = priceData;
+
+    const currentPrice =
+      calculateCurvePrice(
+        currentEthReserve,
+        currentTokenReserve
+      );
+
+    if (
+      Number.isFinite(currentPrice) &&
+      currentPrice > 0
+    ) {
+      const now = Math.floor(
+        Date.now() / 1000
+      );
+
+      const lastPoint =
+        points[points.length - 1];
+
+      if (
+        !lastPoint ||
+        Number(lastPoint.timestamp) !== now
+      ) {
+        points.push({
+          type: "CURRENT",
+          blockNumber: latestBlock.toString(),
+          logIndex: Number.MAX_SAFE_INTEGER,
+          timestamp: now,
+          price: currentPrice,
+        });
+      }
+    }
+  } catch (error) {
+    console.error(
+      "[AELVORA] Current curve price load failed:",
+      error
+    );
+  }
+
+  console.log(
+    `[AELVORA] Curve chart points: ${points.length}`
+  );
+
+  return points;
+}
+
+
+export async function getGlobalTokenMetadata(tokenAddress) {
+  if (!isAddress(tokenAddress)) {
+    throw new Error("Invalid token contract address.");
+  }
+
+  const [name, symbol, decimals] = await Promise.all([
+    publicClient.readContract({
+      address: tokenAddress,
+      abi: TOKEN_ABI,
+      functionName: "name",
+    }),
+    publicClient.readContract({
+      address: tokenAddress,
+      abi: TOKEN_ABI,
+      functionName: "symbol",
+    }),
+    publicClient.readContract({
+      address: tokenAddress,
+      abi: TOKEN_ABI,
+      functionName: "decimals",
+    }),
+  ]);
+
+  return {
+    token: tokenAddress,
+    name: String(name || "Unknown Token"),
+    symbol: String(symbol || "TOKEN"),
+    decimals: Number(decimals),
+  };
+}
+
+export async function getTokenHolders(tokenAddress, limit = 50) {
+  const token = String(tokenAddress || "").trim();
+
+  if (!/^0x[a-fA-F0-9]{40}$/.test(token)) {
+    return [];
+  }
+
+  const ZERO =
+    "0x0000000000000000000000000000000000000000";
+
+  const TRANSFER_EVENT = parseAbiItem(
+    "event Transfer(address indexed from,address indexed to,uint256 value)"
+  );
+
+  // LAST HOLDERS MODE:
+  // Only inspect the most recent 5,000 blocks.
+  // This is intentionally lightweight and does NOT try to find
+  // the true top holders of the token.
+  const MAX_BLOCKS = 5000n;
+  const MAX_CANDIDATES = 50;
+  const BLOCK_CHUNK = 5000n;
+
+  try {
+    const latestBlock = await publicClient.getBlockNumber();
+
+    const minimumBlock =
+      latestBlock > MAX_BLOCKS
+        ? latestBlock - MAX_BLOCKS
+        : 0n;
+
+    const fromBlock = minimumBlock;
+    const toBlock = latestBlock;
+
+    console.log(
+      `[AELVORA] Last Holders scan: ${fromBlock}-${toBlock}`
+    );
+
+    const logs = await publicClient.getLogs({
+      address: token,
+      event: TRANSFER_EVENT,
+      fromBlock,
+      toBlock,
+    });
+
+    // Walk backwards so the newest Transfer participants are preferred.
+    const seen = new Set();
+    const candidates = [];
+
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const log = logs[i];
+
+      const from = String(log.args?.from || "").toLowerCase();
+      const to = String(log.args?.to || "").toLowerCase();
+
+      for (const address of [to, from]) {
+        if (
+          !address ||
+          address === ZERO ||
+          !/^0x[a-f0-9]{40}$/.test(address)
+        ) {
+          continue;
+        }
+
+        if (seen.has(address)) continue;
+
+        seen.add(address);
+        candidates.push(address);
+
+        if (candidates.length >= MAX_CANDIDATES) {
+          break;
+        }
+      }
+
+      if (candidates.length >= MAX_CANDIDATES) {
+        break;
+      }
+    }
+
+    if (!candidates.length) {
+      console.log("[AELVORA] Last Holders: 0 loaded");
+      return [];
+    }
+
+    const [totalSupply, decimals] = await Promise.all([
+      publicClient.readContract({
+        address: token,
+        abi: TOKEN_ABI,
+        functionName: "totalSupply",
+      }),
+      publicClient.readContract({
+        address: token,
+        abi: TOKEN_ABI,
+        functionName: "decimals",
+      }),
+    ]);
+
+    const balances = [];
+
+    // Only 50 balanceOf calls maximum.
+    for (const address of candidates) {
+      try {
+        const balance = await publicClient.readContract({
+          address: token,
+          abi: TOKEN_ABI,
+          functionName: "balanceOf",
+          args: [address],
+        });
+
+        if (balance > 0n) {
+          balances.push({
+            address,
+            balance,
+          });
+        }
+      } catch {
+        // Ignore individual failed balance reads.
+      }
+    }
+
+    // Keep newest activity order, not "top holder" ranking.
+    const holders = balances
+      .slice(0, limit)
+      .map((item, index) => {
+        const address = item.address;
+        const balance = item.balance;
+
+        const share =
+          totalSupply > 0n
+            ? (Number(balance) / Number(totalSupply)) * 100
+            : 0;
+
+        return {
+          rank: index + 1,
+          wallet: `${address.slice(0, 6)}...${address.slice(-4)}`,
+          amount: Number(formatUnits(balance, decimals)).toLocaleString(
+            "en-US",
+            {
+              maximumFractionDigits: 2,
+            }
+          ),
+          share: `${share.toFixed(2)}%`,
+          address,
+          balance,
+        };
+      });
+
+    console.log(
+      `[AELVORA] Last Holders: ${holders.length} loaded`
+    );
+
+    return holders;
+  } catch (error) {
+    console.warn(
+      "[AELVORA] Last Holders load failed:",
+      error?.message || error
+    );
+
+    return [];
+  }
+}
+
+export async function getAelvoraCurveHolders(
+  tokenAddress,
+  curveAddress,
+  limit = 50,
+  createdBlock = null
+) {
+  const token = String(tokenAddress || "").trim();
+  const curve = String(curveAddress || "").trim();
+
+  if (
+    !/^0x[a-fA-F0-9]{40}$/.test(token) ||
+    !/^0x[a-fA-F0-9]{40}$/.test(curve)
+  ) {
+    return [];
+  }
+
+  const ZERO =
+    "0x0000000000000000000000000000000000000000";
+
+  const boughtEvent = parseAbiItem(
+    "event Bought(address indexed buyer,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToCurve,uint256 tokensOut)"
+  );
+
+  const soldEvent = parseAbiItem(
+    "event Sold(address indexed seller,uint256 tokensIn,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToSeller)"
+  );
+
+  const BLOCK_CHUNK = 5000n;
+  const MAX_BLOCKS = 300000n;
+
+  const TARGET_HOLDERS = Math.min(
+    Math.max(Number(limit) || 10, 10),
+    20
+  );
+
+  const MAX_CANDIDATES = Math.max(
+    TARGET_HOLDERS * 2,
+    20
+  );
+
+  try {
+    const latestBlock =
+      await publicClient.getBlockNumber();
+
+    let earliestBlock =
+      latestBlock > MAX_BLOCKS
+        ? latestBlock - MAX_BLOCKS
+        : 0n;
+
+    // Respect token creation block when it is inside
+    // the recent-history window, but never scan more
+    // than 300,000 blocks for Recent Holders.
+    if (
+      createdBlock != null &&
+      String(createdBlock).trim() !== ""
+    ) {
+      try {
+        const creation = BigInt(createdBlock);
+
+        if (creation > earliestBlock) {
+          earliestBlock = creation;
+        }
+      } catch {
+        // Keep the 300k-block safety window.
+      }
+    }
+
+    const activity = [];
+    const seen = new Set();
+
+    // Newest -> oldest.
+    // Stop as soon as enough unique recent traders exist.
+    for (
+      let toBlock = latestBlock;
+      toBlock >= earliestBlock &&
+      seen.size < MAX_CANDIDATES;
+      toBlock -= BLOCK_CHUNK
+    ) {
+      const fromBlock =
+        toBlock >= BLOCK_CHUNK - 1n
+          ? toBlock - BLOCK_CHUNK + 1n
+          : 0n;
+
+      const safeFromBlock =
+        fromBlock < earliestBlock
+          ? earliestBlock
+          : fromBlock;
+
+      console.log(
+        `[AELVORA] Curve holders scan: ${safeFromBlock}-${toBlock}`
+      );
+
+      const [boughtLogs, soldLogs] =
+        await Promise.all([
+          publicClient.getLogs({
+            address: curve,
+            event: boughtEvent,
+            fromBlock: safeFromBlock,
+            toBlock,
+          }),
+
+          publicClient.getLogs({
+            address: curve,
+            event: soldEvent,
+            fromBlock: safeFromBlock,
+            toBlock,
+          }),
+        ]);
+
+      const chunkActivity = [
+        ...boughtLogs.map((log) => ({
+          address: String(
+            log.args?.buyer || ""
+          ).toLowerCase(),
+          blockNumber: log.blockNumber,
+          logIndex: Number(
+            log.logIndex ?? 0n
+          ),
+        })),
+
+        ...soldLogs.map((log) => ({
+          address: String(
+            log.args?.seller || ""
+          ).toLowerCase(),
+          blockNumber: log.blockNumber,
+          logIndex: Number(
+            log.logIndex ?? 0n
+          ),
+        })),
+      ]
+        .filter(
+          (item) =>
+            /^0x[a-f0-9]{40}$/.test(item.address) &&
+            item.address !== ZERO &&
+            item.address !== curve.toLowerCase()
+        )
+        .sort((a, b) => {
+          if (a.blockNumber < b.blockNumber) return 1;
+          if (a.blockNumber > b.blockNumber) return -1;
+          return b.logIndex - a.logIndex;
+        });
+
+      for (const item of chunkActivity) {
+        if (seen.has(item.address)) continue;
+
+        seen.add(item.address);
+        activity.push(item);
+
+        if (seen.size >= MAX_CANDIDATES) {
+          break;
+        }
+      }
+
+      if (safeFromBlock === earliestBlock) {
+        break;
+      }
+    }
+
+    if (!activity.length) {
+      console.log(
+        "[AELVORA] Curve holders: 0 loaded"
+      );
+      return [];
+    }
+
+    const candidates = activity
+      .slice(0, MAX_CANDIDATES)
+      .map((item) => item.address);
+
+    const [totalSupply, decimals] =
+      await Promise.all([
+        publicClient.readContract({
+          address: token,
+          abi: TOKEN_ABI,
+          functionName: "totalSupply",
+        }),
+
+        publicClient.readContract({
+          address: token,
+          abi: TOKEN_ABI,
+          functionName: "decimals",
+        }),
+      ]);
+
+    const balanceResults =
+      await Promise.all(
+        candidates.map(async (address) => {
+          try {
+            const balance =
+              await publicClient.readContract({
+                address: token,
+                abi: TOKEN_ABI,
+                functionName: "balanceOf",
+                args: [address],
+              });
+
+            return {
+              address,
+              balance,
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+    const shortAddress = (address) =>
+      address
+        ? `${address.slice(0, 6)}...${address.slice(-4)}`
+        : "--";
+
+    const holders = balanceResults
+      .filter(
+        (item) =>
+          item &&
+          item.balance > 0n
+      )
+      .slice(0, limit)
+      .map((item, index) => {
+        const balance = item.balance;
+
+        const share =
+          totalSupply > 0n
+            ? (Number(balance) / Number(totalSupply)) * 100
+            : 0;
+
+        return {
+          rank: index + 1,
+
+          // UI expects these exact fields.
+          wallet: shortAddress(item.address),
+          amount: formatUnits(
+            balance,
+            Number(decimals)
+          ),
+
+          share,
+        };
+      });
+
+    console.log(
+      `[AELVORA] Curve holders: ${holders.length} loaded`
+    );
+
+    return holders;
+  } catch (error) {
+    console.warn(
+      "[AELVORA] Curve holders load failed:",
+      error?.message || error
+    );
+
+    return [];
+  }
+}
+
+export async function getRecentTrades(
+  tokenAddress,
+  limit = 50
+) {
+  const token = String(tokenAddress || "").trim();
+
+  if (!/^0x[a-fA-F0-9]{40}$/.test(token)) {
+    return [];
+  }
+
+  const ZERO =
+    "0x0000000000000000000000000000000000000000";
+
+  const shortAddress = (address) =>
+    address
+      ? `${address.slice(0, 6)}...${address.slice(-4)}`
+      : "--";
+
+  const formatTokenAmount = (value, decimals = 18) => {
+    try {
+      const negative = value < 0n;
+      const absolute = negative ? -value : value;
+
+      const formatted = formatUnits(
+        absolute,
+        decimals
+      );
+
+      const number = Number(formatted);
+
+      if (!Number.isFinite(number)) {
+        return formatted;
+      }
+
+      return number.toLocaleString("en-US", {
+        maximumFractionDigits: 2,
+      });
+    } catch {
+      return "0";
+    }
+  };
+
+  const formatEthAmount = (value) => {
+    try {
+      const number = Number(
+        formatEther(value < 0n ? -value : value)
+      );
+
+      return `${number.toFixed(4)} ETH`;
+    } catch {
+      return "0.0000 ETH";
+    }
+  };
+
+  try {
+    /*
+     * ========================================================
+     * 1. AELVORA TOKEN
+     * ========================================================
+     */
+
+    let aelvoraCurve = ZERO;
+
+    try {
+      aelvoraCurve = await publicClient.readContract({
+        address: FACTORY_ADDRESS,
+        abi: FACTORY_ABI,
+        functionName: "curveOf",
+        args: [token],
+      });
+    } catch {
+      aelvoraCurve = ZERO;
+    }
+
+    if (
+      aelvoraCurve &&
+      aelvoraCurve.toLowerCase() !== ZERO
+    ) {
+      const latestBlock =
+        await publicClient.getBlockNumber();
+
+      const boughtEvent = parseAbiItem(
+        "event Bought(address indexed buyer,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToCurve,uint256 tokensOut)"
+      );
+
+      const soldEvent = parseAbiItem(
+        "event Sold(address indexed seller,uint256 tokensIn,uint256 ethGross,uint256 platformFee,uint256 creatorFee,uint256 ethToSeller)"
+      );
+
+      const BLOCK_CHUNK = 5000n;
+      const MAX_BLOCKS = 300000n;
+
+      let currentTo = latestBlock;
+
+      const minimumBlock =
+        latestBlock > MAX_BLOCKS
+          ? latestBlock - MAX_BLOCKS
+          : 0n;
+
+      const allTrades = [];
+
+      while (
+        currentTo >= minimumBlock &&
+        allTrades.length < limit
+      ) {
+        const currentFrom =
+          currentTo > BLOCK_CHUNK
+            ? currentTo - BLOCK_CHUNK + 1n
+            : 0n;
+
+        const fromBlock =
+          currentFrom < minimumBlock
+            ? minimumBlock
+            : currentFrom;
+
+        const [boughtLogs, soldLogs] =
+          await Promise.all([
+            publicClient.getLogs({
+              address: aelvoraCurve,
+              event: boughtEvent,
+              fromBlock,
+              toBlock: currentTo,
+            }),
+
+            publicClient.getLogs({
+              address: aelvoraCurve,
+              event: soldEvent,
+              fromBlock,
+              toBlock: currentTo,
+            }),
+          ]);
+
+        for (const log of boughtLogs) {
+          allTrades.push({
+            type: "BUY",
+            wallet: log.args?.buyer || "",
+            amount: formatEthAmount(
+              log.args?.ethGross ?? 0n
+            ),
+            tokens: formatTokenAmount(
+              log.args?.tokensOut ?? 0n
+            ),
+            blockNumber: log.blockNumber,
+            logIndex: log.logIndex,
+            txHash: log.transactionHash,
+          });
+        }
+
+        for (const log of soldLogs) {
+          allTrades.push({
+            type: "SELL",
+            wallet: log.args?.seller || "",
+            amount: formatEthAmount(
+              log.args?.ethGross ?? 0n
+            ),
+            tokens: formatTokenAmount(
+              log.args?.tokensIn ?? 0n
+            ),
+            blockNumber: log.blockNumber,
+            logIndex: log.logIndex,
+            txHash: log.transactionHash,
+          });
+        }
+
+        if (fromBlock === minimumBlock) {
+          break;
+        }
+
+        currentTo = fromBlock - 1n;
+      }
+
+      const trades = allTrades
+        .sort((a, b) => {
+          if (a.blockNumber > b.blockNumber) return -1;
+          if (a.blockNumber < b.blockNumber) return 1;
+
+          return Number(
+            b.logIndex ?? 0n
+          ) - Number(
+            a.logIndex ?? 0n
+          );
+        })
+        .slice(0, limit)
+        .map((trade) => ({
+          ...trade,
+          wallet: shortAddress(trade.wallet),
+        }));
+
+      console.log(
+        `[AELVORA] Recent trades: ${trades.length} AELVORA TX`
+      );
+
+      return trades;
+    }
+
+    /*
+     * ========================================================
+     * 2. GLOBAL TOKEN
+     * ========================================================
+     */
+
+    console.log(
+      `[AELVORA] ${token} is global/external. Resolving DexScreener pair...`
+    );
+
+    const dexData =
+      await getDexScreenerTokenData(token);
+
+    if (!dexData) {
+      console.warn(
+        "[AELVORA] DexScreener returned no data."
+      );
+      return [];
+    }
+
+    console.log(
+      "[AELVORA] DexScreener raw pair data:",
+      dexData
+    );
+
+    const pairAddress =
+      dexData?.pairAddress;
+
+    if (!pairAddress) {
+      console.warn(
+        "[AELVORA] Global token has no DexScreener pair."
+      );
+      return [];
+    }
+
+    console.log(
+      `[AELVORA] Global pair/pool: ${pairAddress}`
+    );
+
+    /*
+     * ========================================================
+     * GLOBAL TOKEN DECIMALS
+     * ========================================================
+     */
+
+    let tokenDecimals = 18;
+
+    try {
+      tokenDecimals = Number(
+        await publicClient.readContract({
+          address: token,
+          abi: [
+            "function decimals() view returns (uint8)",
+          ],
+          functionName: "decimals",
+        })
+      );
+    } catch {
+      tokenDecimals = 18;
+    }
+
+    const latestBlock =
+      await publicClient.getBlockNumber();
+
+    const BLOCK_CHUNK = 5000n;
+    const MAX_BLOCKS = 300000n;
+
+    const minimumBlock =
+      latestBlock > MAX_BLOCKS
+        ? latestBlock - MAX_BLOCKS
+        : 0n;
+
+    /*
+     * ========================================================
+     * GLOBAL UNISWAP V2
+     *
+     * IMPORTANT:
+     * DexScreener on Robinhood can return a bytes32 pool ID
+     * for V4, OR a normal EVM pair address for V2/V3.
+     * Only use token0/token1 when pairAddress is 20-byte.
+     * ========================================================
+     */
+
+    const isEvmPair =
+      /^0x[a-fA-F0-9]{40}$/.test(
+        String(pairAddress)
+      );
+
+    if (isEvmPair) {
+      let token0 = null;
+      let token1 = null;
+
+      try {
+        [token0, token1] =
+          await Promise.all([
+            publicClient.readContract({
+              address: pairAddress,
+              abi: parseAbi([
+                "function token0() view returns (address)",
+              ]),
+              functionName: "token0",
+            }),
+
+            publicClient.readContract({
+              address: pairAddress,
+              abi: parseAbi([
+                "function token1() view returns (address)",
+              ]),
+              functionName: "token1",
+            }),
+          ]);
+      } catch (error) {
+        console.warn(
+          "[AELVORA] Pair is address-sized but token0/token1 failed:",
+          error
+        );
+        return [];
+      }
+
+      const tokenLower =
+        token.toLowerCase();
+
+      const token0IsTarget =
+        String(token0).toLowerCase() === tokenLower;
+
+      const token1IsTarget =
+        String(token1).toLowerCase() === tokenLower;
+
+      if (!token0IsTarget && !token1IsTarget) {
+        console.warn(
+          "[AELVORA] DexScreener pair does not contain requested token."
+        );
+        return [];
+      }
+
+      /*
+       * V3
+       */
+
+      const v3SwapEvent = parseAbiItem(
+        "event Swap(address indexed sender,address indexed recipient,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick)"
+      );
+
+      const allV3 = [];
+
+      let currentTo = latestBlock;
+
+      while (
+        currentTo >= minimumBlock &&
+        allV3.length < limit
+      ) {
+        const currentFrom =
+          currentTo > BLOCK_CHUNK
+            ? currentTo - BLOCK_CHUNK + 1n
+            : 0n;
+
+        const fromBlock =
+          currentFrom < minimumBlock
+            ? minimumBlock
+            : currentFrom;
+
+        try {
+          const logs =
+            await publicClient.getLogs({
+              address: pairAddress,
+              event: v3SwapEvent,
+              fromBlock,
+              toBlock: currentTo,
+            });
+
+          for (const log of logs) {
+            const amount0 =
+              log.args?.amount0 ?? 0n;
+
+            const amount1 =
+              log.args?.amount1 ?? 0n;
+
+            const targetAmount =
+              token0IsTarget
+                ? amount0
+                : amount1;
+
+            if (targetAmount === 0n) {
+              continue;
+            }
+
+            const isBuy =
+              targetAmount < 0n;
+
+            const tokenAmount =
+              targetAmount < 0n
+                ? -targetAmount
+                : targetAmount;
+
+            const quoteAmount =
+              token0IsTarget
+                ? amount1
+                : amount0;
+
+            const quoteAbsolute =
+              quoteAmount < 0n
+                ? -quoteAmount
+                : quoteAmount;
+
+            allV3.push({
+              type: isBuy ? "BUY" : "SELL",
+              wallet:
+                log.args?.sender ||
+                log.args?.recipient ||
+                "",
+              amount:
+                formatEthAmount(quoteAbsolute),
+              tokens:
+                formatTokenAmount(
+                  tokenAmount,
+                  tokenDecimals
+                ),
+              blockNumber: log.blockNumber,
+              logIndex: log.logIndex,
+              txHash: log.transactionHash,
+            });
+          }
+        } catch (error) {
+          console.warn(
+            "[AELVORA] V3 log scan failed:",
+            error
+          );
+          break;
+        }
+
+        if (fromBlock === minimumBlock) {
+          break;
+        }
+
+        currentTo = fromBlock - 1n;
+      }
+
+      if (allV3.length) {
+        const trades = allV3
+          .sort((a, b) => {
+            if (a.blockNumber > b.blockNumber) return -1;
+            if (a.blockNumber < b.blockNumber) return 1;
+
+            return Number(
+              b.logIndex ?? 0n
+            ) - Number(
+              a.logIndex ?? 0n
+            );
+          })
+          .slice(0, limit)
+          .map((trade) => ({
+            ...trade,
+            wallet: shortAddress(trade.wallet),
+          }));
+
+        console.log(
+          `[AELVORA] Recent trades: ${trades.length} GLOBAL V3 TX`
+        );
+
+        return trades;
+      }
+
+      /*
+       * V2
+       */
+
+      const v2SwapEvent = parseAbiItem(
+        "event Swap(address indexed sender,uint256 amount0In,uint256 amount1In,uint256 amount0Out,uint256 amount1Out,address indexed to)"
+      );
+
+      const allV2 = [];
+
+      currentTo = latestBlock;
+
+      while (
+        currentTo >= minimumBlock &&
+        allV2.length < limit
+      ) {
+        const currentFrom =
+          currentTo > BLOCK_CHUNK
+            ? currentTo - BLOCK_CHUNK + 1n
+            : 0n;
+
+        const fromBlock =
+          currentFrom < minimumBlock
+            ? minimumBlock
+            : currentFrom;
+
+        try {
+          const logs =
+            await publicClient.getLogs({
+              address: pairAddress,
+              event: v2SwapEvent,
+              fromBlock,
+              toBlock: currentTo,
+            });
+
+          for (const log of logs) {
+            const amount0In =
+              log.args?.amount0In ?? 0n;
+
+            const amount1In =
+              log.args?.amount1In ?? 0n;
+
+            const amount0Out =
+              log.args?.amount0Out ?? 0n;
+
+            const amount1Out =
+              log.args?.amount1Out ?? 0n;
+
+            const targetIn =
+              token0IsTarget
+                ? amount0In
+                : amount1In;
+
+            const targetOut =
+              token0IsTarget
+                ? amount0Out
+                : amount1Out;
+
+            if (
+              targetIn === 0n &&
+              targetOut === 0n
+            ) {
+              continue;
+            }
+
+            const isBuy =
+              targetOut > 0n;
+
+            const tokenAmount =
+              isBuy
+                ? targetOut
+                : targetIn;
+
+            const quoteIn =
+              token0IsTarget
+                ? amount1In
+                : amount0In;
+
+            const quoteOut =
+              token0IsTarget
+                ? amount1Out
+                : amount0Out;
+
+            const quoteAmount =
+              isBuy
+                ? quoteIn
+                : quoteOut;
+
+            allV2.push({
+              type: isBuy ? "BUY" : "SELL",
+              wallet:
+                log.args?.to ||
+                log.args?.sender ||
+                "",
+              amount:
+                formatEthAmount(quoteAmount),
+              tokens:
+                formatTokenAmount(
+                  tokenAmount,
+                  tokenDecimals
+                ),
+              blockNumber: log.blockNumber,
+              logIndex: log.logIndex,
+              txHash: log.transactionHash,
+            });
+          }
+        } catch (error) {
+          console.warn(
+            "[AELVORA] V2 log scan failed:",
+            error
+          );
+          break;
+        }
+
+        if (fromBlock === minimumBlock) {
+          break;
+        }
+
+        currentTo = fromBlock - 1n;
+      }
+
+      const trades = allV2
+        .sort((a, b) => {
+          if (a.blockNumber > b.blockNumber) return -1;
+          if (a.blockNumber < b.blockNumber) return 1;
+
+          return Number(
+            b.logIndex ?? 0n
+          ) - Number(
+            a.logIndex ?? 0n
+          );
+        })
+        .slice(0, limit)
+        .map((trade) => ({
+          ...trade,
+          wallet: shortAddress(trade.wallet),
+        }));
+
+      console.log(
+        `[AELVORA] Recent trades: ${trades.length} GLOBAL V2 TX`
+      );
+
+      return trades;
+    }
+
+    /*
+     * ========================================================
+     * GLOBAL UNISWAP V4
+     *
+     * DexScreener pairAddress is a bytes32 Pool ID.
+     * PoolManager is the actual event emitter.
+     * ========================================================
+     */
+
+    const V4_POOL_MANAGER =
+      "0x8366a39CC670B4001A1121B8F6A443A643e40951";
+
+    const poolId =
+      String(pairAddress);
+
+    if (
+      !/^0x[a-fA-F0-9]{64}$/.test(poolId)
+    ) {
+      console.warn(
+        "[AELVORA] DexScreener pair is neither EVM pair nor V4 pool ID."
+      );
+      return [];
+    }
+
+    console.log(
+      `[AELVORA] Global V4 pool ID: ${poolId}`
+    );
+
+    const v4SwapEvent = parseAbiItem(
+      "event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)"
+    );
+
+    const allV4 = [];
+
+    let currentTo = latestBlock;
+
+    while (
+      currentTo >= minimumBlock &&
+      allV4.length < limit
+    ) {
+      const currentFrom =
+        currentTo > BLOCK_CHUNK
+          ? currentTo - BLOCK_CHUNK + 1n
+          : 0n;
+
+      const fromBlock =
+        currentFrom < minimumBlock
+          ? minimumBlock
+          : currentFrom;
+
+      try {
+        const logs =
+          await publicClient.getLogs({
+            address: V4_POOL_MANAGER,
+            event: v4SwapEvent,
+            args: {
+              id: poolId,
+            },
+            fromBlock,
+            toBlock: currentTo,
+          });
+
+        for (const log of logs) {
+          const amount0 =
+            BigInt(log.args?.amount0 ?? 0);
+
+          const amount1 =
+            BigInt(log.args?.amount1 ?? 0);
+
+          /*
+           * We need the target token side.
+           * DexScreener's baseToken identifies the token
+           * represented by the requested contract.
+           */
+          const baseToken =
+            dexData?.baseToken ||
+            "";
+
+          const quoteToken =
+            dexData?.quoteToken ||
+            "";
+
+          const tokenLower =
+            token.toLowerCase();
+
+          const baseTokenLower =
+            String(baseToken).toLowerCase();
+
+          const quoteTokenLower =
+            String(quoteToken).toLowerCase();
+
+          /*
+           * DexScreener gives us the actual token pair.
+           * For V4, amount0/amount1 follow currency0/currency1.
+           *
+           * The requested token must be one side of the pair.
+           * Prefer the side identified by DexScreener as baseToken.
+           */
+          let targetIsCurrency0;
+
+          if (baseTokenLower === tokenLower) {
+            targetIsCurrency0 = true;
+          } else if (quoteTokenLower === tokenLower) {
+            targetIsCurrency0 = false;
+          } else {
+            console.warn(
+              "[AELVORA] V4 pool does not contain requested token:",
+              {
+                token,
+                baseToken,
+                quoteToken,
+              }
+            );
+            continue;
+          }
+
+          const targetAmount =
+            targetIsCurrency0
+              ? amount0
+              : amount1;
+
+          if (targetAmount === 0n) {
+            continue;
+          }
+
+          const isBuy =
+            targetAmount < 0n;
+
+          const tokenAmount =
+            targetAmount < 0n
+              ? -targetAmount
+              : targetAmount;
+
+          const quoteAmount =
+            targetIsCurrency0
+              ? amount1
+              : amount0;
+
+          const quoteAbsolute =
+            quoteAmount < 0n
+              ? -quoteAmount
+              : quoteAmount;
+
+          allV4.push({
+            type: isBuy ? "BUY" : "SELL",
+            wallet:
+              log.args?.sender || "",
+            amount:
+              formatEthAmount(quoteAbsolute),
+            tokens:
+              formatTokenAmount(
+                tokenAmount,
+                tokenDecimals
+              ),
+            blockNumber:
+              log.blockNumber,
+            logIndex:
+              log.logIndex,
+            txHash:
+              log.transactionHash,
+          });
+        }
+      } catch (error) {
+        console.warn(
+          "[AELVORA] V4 log scan failed:",
+          error
+        );
+        break;
+      }
+
+      if (fromBlock === minimumBlock) {
+        break;
+      }
+
+      currentTo = fromBlock - 1n;
+    }
+
+    const trades = allV4
+      .sort((a, b) => {
+        if (a.blockNumber > b.blockNumber) return -1;
+        if (a.blockNumber < b.blockNumber) return 1;
+
+        return Number(
+          b.logIndex ?? 0n
+        ) - Number(
+          a.logIndex ?? 0n
+        );
+      })
+      .slice(0, limit)
+      .map((trade) => ({
+        ...trade,
+        wallet: shortAddress(trade.wallet),
+      }));
+
+    console.log(
+      `[AELVORA] Recent trades: ${trades.length} GLOBAL V4 TX`
+    );
+
+    return trades;
+
+  } catch (error) {
+    console.error(
+      "[AELVORA] Universal recent trades failed:",
+      error
+    );
+
+    return [];
+  }
+}
+
+export async function getDexScreenerTokenData(tokenAddress) {
+  const response = await fetch(
+    `/dexscreener/token-pairs/v1/robinhood/${tokenAddress}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `DexScreener request failed (${response.status}).`
+    );
+  }
+
+  const pairs = await response.json();
+
+  if (!Array.isArray(pairs) || pairs.length === 0) {
+    return {
+      pairAddress: null,
+      dexId: null,
+      pairUrl: null,
+      routeType: null,
+      pools: [],
+      priceNative: null,
+      priceUsd: null,
+      marketCapUsd: null,
+      liquidityUsd: null,
+      volume24h: null,
+      priceChange24h: null,
+      logoURI: null,
+      websites: [],
+      socials: [],
+    };
+  }
+
+  const tokenLower = tokenAddress.toLowerCase();
+
+  const matchingPairs = pairs.filter((pair) => {
+    const base = pair?.baseToken?.address?.toLowerCase();
+    const quote = pair?.quoteToken?.address?.toLowerCase();
+
+    return base === tokenLower || quote === tokenLower;
+  });
+
+  const candidates = matchingPairs.length
+    ? matchingPairs
+    : pairs;
+
+  /*
+   * Keep every candidate instead of throwing away all pools except
+   * the deepest one.
+   *
+   * This matters because the deepest Robinhood pair can be Sushi V3
+   * while a usable Uniswap V4 ETH pool also exists.
+   */
+  const pools = [...candidates]
+    .filter((pair) => pair?.pairAddress)
+    .sort(
+      (a, b) =>
+        Number(b?.liquidity?.usd || 0) -
+        Number(a?.liquidity?.usd || 0)
+    )
+    .map((pair) => ({
+      pairAddress: pair.pairAddress,
+      dexId: pair.dexId || null,
+      pairUrl: pair.url || null,
+      labels: Array.isArray(pair.labels)
+        ? pair.labels
+        : [],
+      baseToken:
+        pair?.baseToken?.address || null,
+      baseTokenSymbol:
+        pair?.baseToken?.symbol || null,
+      baseTokenName:
+        pair?.baseToken?.name || null,
+
+      quoteToken:
+        pair?.quoteToken?.address || null,
+      quoteTokenSymbol:
+        pair?.quoteToken?.symbol || null,
+      quoteTokenName:
+        pair?.quoteToken?.name || null,
+
+      priceNative:
+        pair?.priceNative || null,
+      priceUsd:
+        pair?.priceUsd || null,
+      liquidityUsd:
+        pair?.liquidity?.usd != null
+          ? Number(pair.liquidity.usd)
+          : null,
+      volume24h:
+        pair?.volume?.h24 != null
+          ? Number(pair.volume.h24)
+          : null,
+      priceChange24h:
+        pair?.priceChange?.h24 != null
+          ? Number(pair.priceChange.h24)
+          : null,
+    }));
+
+  /*
+   * Prefer a native ETH/WETH quote pair.
+   *
+   * V4 uses native ETH (zero address).
+   * V3 uses WETH.
+   */
+  const ethCandidates = pools.filter((pool) => {
+    const quote = String(pool.quoteToken || "").toLowerCase();
+    const base = String(pool.baseToken || "").toLowerCase();
+
+    return (
+      quote === ZERO_ADDRESS.toLowerCase() ||
+      base === ZERO_ADDRESS.toLowerCase() ||
+      quote === WETH9.toLowerCase() ||
+      base === WETH9.toLowerCase()
+    );
+  });
+
+  const ranked =
+    ethCandidates.length > 0
+      ? ethCandidates
+      : pools;
+
+  const pair = ranked[0] || pools[0];
+
+  let routeType = null;
+
+  if (pair) {
+    const isV4 =
+      /^0x[a-fA-F0-9]{64}$/.test(
+        String(pair.pairAddress)
+      );
+
+    if (isV4) {
+      routeType = "v4";
+    } else if (
+      String(pair.dexId || "").toLowerCase().includes("uniswap")
+    ) {
+      routeType = "v3";
+    } else {
+      routeType = "external";
+    }
+  }
+
+  return {
+    pairAddress: pair?.pairAddress || null,
+    dexId: pair?.dexId || null,
+    pairUrl: pair?.pairUrl || null,
+    routeType,
+
+    // V4 DexScreener pairAddress is the V4 poolId.
+    // Keep V3 data completely separate.
+    v4PoolId:
+      routeType === "v4" &&
+      /^0x[a-fA-F0-9]{64}$/.test(
+        String(pair?.pairAddress || "")
+      )
+        ? pair.pairAddress
+        : null,
+
+    pools,
+
+    baseToken: pair?.baseToken || null,
+    quoteToken: pair?.quoteToken || null,
+
+    priceNative: pair?.priceNative || null,
+    priceUsd: pair?.priceUsd || null,
+
+    /*
+     * GLOBAL MARKET CAP
+     * -----------------
+     * DexScreener already provides marketCap / fdv.
+     * Use marketCap first, FDV as fallback.
+     */
+    marketCapUsd:
+      pair?.marketCap != null
+        ? Number(pair.marketCap)
+        : pair?.fdv != null
+          ? Number(pair.fdv)
+          : null,
+
+    liquidityUsd: pair?.liquidityUsd ?? null,
+    volume24h: pair?.volume24h ?? null,
+    priceChange24h: pair?.priceChange24h ?? null,
+
+    logoURI: null,
+    websites: [],
+    socials: [],
+  };
+}
+
+
+const V3_FEE_TIERS = [10000, 3000, 500, 100];
+
+export async function resolveV3Pool(tokenAddress) {
+  for (const fee of V3_FEE_TIERS) {
+    try {
+      const pool = await publicClient.readContract({
+        address: V3_FACTORY,
+        abi: V3_FACTORY_ABI,
+        functionName: "getPool",
+        args: [tokenAddress, WETH9, fee],
+      });
+
+      if (
+        pool &&
+        pool.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+      ) {
+        return {
+          pool,
+          fee,
+        };
+      }
+    } catch {
+      // Try next fee tier.
+    }
+  }
+
+  return {
+    pool: null,
+    fee: null,
+  };
+}
+
+
+export async function getMarketChart(
+  tokenAddress,
+  pairAddress,
+  timeframe = "1H"
+) {
+  if (!tokenAddress || !isAddress(tokenAddress)) {
+    throw new Error("Invalid token address.");
+  }
+
+  const timeframeSeconds = {
+    "5m": 300,
+    "15m": 900,
+    "1H": 3600,
+    "4H": 14400,
+    "1D": 86400,
+  };
+
+  const seconds = timeframeSeconds[timeframe] || 3600;
+
+  try {
+    const tokenLower = tokenAddress.toLowerCase();
+
+    /*
+     * DexScreener can return:
+     * - a normal 20-byte V3 pool address
+     * - a 32-byte V4 pool id
+     */
+    const isV4PoolId =
+      typeof pairAddress === "string" &&
+      /^0x[a-fA-F0-9]{64}$/.test(pairAddress);
+
+    /*
+     * ------------------------------------------------------------
+     * V4 CHART
+     * ------------------------------------------------------------
+     */
+    if (isV4PoolId) {
+      const POOL_MANAGER = "0x8366a39CC670B4001A1121B8F6A443A643e40951";
+
+      const V4_SWAP_EVENT = parseAbiItem(
+        "event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)"
+      );
+
+      const latestBlock = await publicClient.getBlockNumber();
+
+      const blocksPerSecond = 2n;
+      let fromBlock =
+        latestBlock > BigInt(seconds) * blocksPerSecond
+          ? latestBlock - BigInt(seconds) * blocksPerSecond
+          : 0n;
+
+      const toBlock = latestBlock;
+
+      const MAX_BLOCKS = 50000n;
+
+      if (toBlock - fromBlock > MAX_BLOCKS) {
+        fromBlock = toBlock - MAX_BLOCKS;
+      }
+
+      const STEP = 5000n;
+      const logs = [];
+
+      for (
+        let startBlock = fromBlock;
+        startBlock <= toBlock;
+        startBlock += STEP
+      ) {
+        const endBlock =
+          startBlock + STEP - 1n > toBlock
+            ? toBlock
+            : startBlock + STEP - 1n;
+
+        try {
+          const chunk = await publicClient.getLogs({
+            address: POOL_MANAGER,
+            event: V4_SWAP_EVENT,
+            args: {
+              id: pairAddress,
+            },
+            fromBlock: startBlock,
+            toBlock: endBlock,
+          });
+
+          if (chunk.length) {
+            logs.push(...chunk);
+          }
+        } catch (error) {
+          console.warn(
+            "[AELVORA] V4 chart RPC chunk failed:",
+            startBlock.toString(),
+            endBlock.toString(),
+            error?.message || error
+          );
+        }
+      }
+
+      if (!logs.length) {
+        return [];
+      }
+
+      /*
+       * We only need the most recent swaps for the chart.
+       * This also limits timestamp RPC calls when a pool is active.
+       */
+      const recentLogs = logs
+        .sort((a, b) => {
+          if (a.blockNumber !== b.blockNumber) {
+            return a.blockNumber > b.blockNumber ? -1 : 1;
+          }
+
+          const ai = BigInt(a.logIndex ?? 0);
+          const bi = BigInt(b.logIndex ?? 0);
+
+          return ai > bi ? -1 : ai < bi ? 1 : 0;
+        })
+        .slice(0, 300);
+
+      const uniqueBlocks = [
+        ...new Set(
+          recentLogs.map((log) => log.blockNumber.toString())
+        ),
+      ];
+
+      const timestampEntries = await Promise.all(
+        uniqueBlocks.map(async (blockNumber) => {
+          try {
+            const block = await publicClient.getBlock({
+              blockNumber: BigInt(blockNumber),
+            });
+
+            return [
+              blockNumber,
+              Number(block.timestamp),
+            ];
+          } catch {
+            return [blockNumber, null];
+          }
+        })
+      );
+
+      const timestampMap = new Map(timestampEntries);
+
+      const cutoff =
+        Math.floor(Date.now() / 1000) - seconds;
+
+      const points = [];
+
+      for (const log of recentLogs) {
+        const timestamp = timestampMap.get(
+          log.blockNumber.toString()
+        );
+
+        if (
+          !Number.isFinite(timestamp) ||
+          timestamp < cutoff
+        ) {
+          continue;
+        }
+
+        const sqrtPriceX96 = log.args?.sqrtPriceX96;
+
+        if (!sqrtPriceX96 || sqrtPriceX96 <= 0n) {
+          continue;
+        }
+
+
+        /*
+         * The V4 pool id itself is not enough to safely infer
+         * whether the target token is currency0 or currency1.
+         * Use the latest swap direction only as a fallback and
+         * keep the price in a positive form.
+         *
+         * The actual pool price is represented by sqrtPriceX96.
+         */
+        const sqrtNumber = Number(sqrtPriceX96);
+
+        if (!Number.isFinite(sqrtNumber) || sqrtNumber <= 0) {
+          continue;
+        }
+
+        const Q192 = 2 ** 192;
+        const rawRatio =
+          (sqrtNumber * sqrtNumber) / Q192;
+
+        if (!Number.isFinite(rawRatio) || rawRatio <= 0) {
+          continue;
+        }
+
+        /*
+         * Use the historical sqrtPriceX96 directly from the
+         * V4 Swap event. Do not call PoolManager.getSlot0()
+         * for every historical log.
+         */
+        const price = rawRatio;
+
+        if (!Number.isFinite(price) || price <= 0) {
+          continue;
+        }
+
+        points.push({
+          type: "MARKET",
+          timestamp,
+          price,
+        });
+      }
+
+      points.sort(
+        (a, b) => a.timestamp - b.timestamp
+      );
+
+      const compacted = [];
+
+      for (const point of points) {
+        const last =
+          compacted[compacted.length - 1];
+
+        if (
+          last &&
+          last.timestamp === point.timestamp
+        ) {
+          last.price = point.price;
+        } else {
+          compacted.push({
+            ...point,
+          });
+        }
+      }
+
+      return compacted.slice(-500);
+    }
+
+    /*
+     * ------------------------------------------------------------
+     * V3 CHART
+     * ------------------------------------------------------------
+     */
+    let pool = null;
+
+    if (pairAddress && isAddress(pairAddress)) {
+      pool = pairAddress;
+    } else {
+      const resolved = await resolveV3Pool(tokenAddress);
+
+      if (resolved?.pool && isAddress(resolved.pool)) {
+        pool = resolved.pool;
+      }
+    }
+
+    if (!pool) {
+      console.warn(
+        "[AELVORA] No usable market pool for chart:",
+        tokenAddress,
+        pairAddress
+      );
+      return [];
+    }
+
+    const latestBlock = await publicClient.getBlockNumber();
+
+    const blocksPerSecond = 2n;
+
+    let fromBlock =
+      latestBlock > BigInt(seconds) * blocksPerSecond
+        ? latestBlock - BigInt(seconds) * blocksPerSecond
+        : 0n;
+
+    const toBlock = latestBlock;
+
+    const MAX_BLOCKS = 50000n;
+
+    if (toBlock - fromBlock > MAX_BLOCKS) {
+      fromBlock = toBlock - MAX_BLOCKS;
+    }
+
+    const SWAP_EVENT_ABI = parseAbiItem(
+      "event Swap(address indexed sender,address indexed recipient,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick)"
+    );
+
+    const POOL_ABI = parseAbi([
+      "function token0() view returns (address)",
+      "function token1() view returns (address)",
+      "function fee() view returns (uint24)",
+    ]);
+
+    const [token0, token1] = await Promise.all([
+      publicClient.readContract({
+        address: pool,
+        abi: POOL_ABI,
+        functionName: "token0",
+      }),
+      publicClient.readContract({
+        address: pool,
+        abi: POOL_ABI,
+        functionName: "token1",
+      }),
+    ]);
+
+    const token0Lower = token0.toLowerCase();
+    const token1Lower = token1.toLowerCase();
+    const wethLower = WETH9.toLowerCase();
+
+    const tokenIs0 = token0Lower === tokenLower;
+    const tokenIs1 = token1Lower === tokenLower;
+
+    const wethIs0 = token0Lower === wethLower;
+    const wethIs1 = token1Lower === wethLower;
+
+    if (
+      (!tokenIs0 && !tokenIs1) ||
+      (!wethIs0 && !wethIs1)
+    ) {
+      console.warn("[AELVORA] Market pool is not token/WETH:", {
+        tokenAddress,
+        pool,
+        token0,
+        token1,
+      });
+
+      return [];
+    }
+
+    const DECIMALS_ABI = parseAbi([
+      "function decimals() view returns (uint8)",
+    ]);
+
+    const [token0Decimals, token1Decimals] =
+      await Promise.all([
+        publicClient.readContract({
+          address: token0,
+          abi: DECIMALS_ABI,
+          functionName: "decimals",
+        }),
+        publicClient.readContract({
+          address: token1,
+          abi: DECIMALS_ABI,
+          functionName: "decimals",
+        }),
+      ]);
+
+    const STEP = 5000n;
+    const logs = [];
+
+    for (
+      let startBlock = fromBlock;
+      startBlock <= toBlock;
+      startBlock += STEP
+    ) {
+      const endBlock =
+        startBlock + STEP - 1n > toBlock
+          ? toBlock
+          : startBlock + STEP - 1n;
+
+      try {
+        const chunk = await publicClient.getLogs({
+          address: pool,
+          event: SWAP_EVENT_ABI,
+          fromBlock: startBlock,
+          toBlock: endBlock,
+        });
+
+        if (chunk.length) {
+          logs.push(...chunk);
+        }
+      } catch (error) {
+        console.warn(
+          "[AELVORA] Chart RPC chunk failed:",
+          startBlock.toString(),
+          endBlock.toString(),
+          error?.message || error
+        );
+      }
+    }
+
+    if (!logs.length) {
+      return [];
+    }
+
+    const cutoff =
+      Math.floor(Date.now() / 1000) - seconds;
+
+    const recentLogs = logs
+      .sort((a, b) => {
+        if (a.blockNumber !== b.blockNumber) {
+          return a.blockNumber > b.blockNumber ? -1 : 1;
+        }
+
+        const ai = BigInt(a.logIndex ?? 0);
+        const bi = BigInt(b.logIndex ?? 0);
+
+        return ai > bi ? -1 : ai < bi ? 1 : 0;
+      })
+      .slice(0, 300);
+
+    const uniqueBlocks = [
+      ...new Set(
+        recentLogs.map((log) => log.blockNumber.toString())
+      ),
+    ];
+
+    const timestampEntries = await Promise.all(
+      uniqueBlocks.map(async (blockNumber) => {
+        try {
+          const block = await publicClient.getBlock({
+            blockNumber: BigInt(blockNumber),
+          });
+
+          return [
+            blockNumber,
+            Number(block.timestamp),
+          ];
+        } catch {
+          return [blockNumber, null];
+        }
+      })
+    );
+
+    const timestampMap = new Map(timestampEntries);
+    const points = [];
+
+    const Q192 = 2n ** 192n;
+
+    for (const log of recentLogs) {
+      const timestamp = timestampMap.get(
+        log.blockNumber.toString()
+      );
+
+      if (
+        !Number.isFinite(timestamp) ||
+        timestamp < cutoff
+      ) {
+        continue;
+      }
+
+      const sqrtPriceX96 = log.args?.sqrtPriceX96;
+
+      if (!sqrtPriceX96 || sqrtPriceX96 <= 0n) {
+        continue;
+      }
+
+      const sqrtNumber = Number(sqrtPriceX96);
+
+      if (!Number.isFinite(sqrtNumber) || sqrtNumber <= 0) {
+        continue;
+      }
+
+      const rawRatio =
+        (sqrtNumber * sqrtNumber) /
+        Number(Q192);
+
+      if (!Number.isFinite(rawRatio) || rawRatio <= 0) {
+        continue;
+      }
+
+      const decimalAdjustment =
+        10 ** (
+          Number(token0Decimals) -
+          Number(token1Decimals)
+        );
+
+      const token1PerToken0 =
+        rawRatio * decimalAdjustment;
+
+      let price;
+
+      if (tokenIs0 && wethIs1) {
+        price = token1PerToken0;
+      } else if (wethIs0 && tokenIs1) {
+        price = 1 / token1PerToken0;
+      } else {
+        continue;
+      }
+
+      if (!Number.isFinite(price) || price <= 0) {
+        continue;
+      }
+
+      points.push({
+        type: "MARKET",
+        timestamp,
+        price,
+      });
+    }
+
+    points.sort(
+      (a, b) => a.timestamp - b.timestamp
+    );
+
+    const compacted = [];
+
+    for (const point of points) {
+      const last =
+        compacted[compacted.length - 1];
+
+      if (
+        last &&
+        last.timestamp === point.timestamp
+      ) {
+        last.price = point.price;
+      } else {
+        compacted.push({
+          ...point,
+        });
+      }
+    }
+
+    return compacted.slice(-500);
+  } catch (error) {
+    console.warn(
+      "[AELVORA] Market chart failed:",
+      error?.message || error
+    );
+
+    return [];
+  }
+}
+
+const AELVORA_CREATED_BLOCK_CACHE = new Map();
+
+async function getAelvoraCreatedBlock(tokenAddress) {
+  const key = String(tokenAddress || "").toLowerCase();
+
+  if (!key) return null;
+
+  if (AELVORA_CREATED_BLOCK_CACHE.has(key)) {
+    return AELVORA_CREATED_BLOCK_CACHE.get(key);
+  }
+
+  try {
+    const response = await fetch("/api/market/tokens", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      AELVORA_CREATED_BLOCK_CACHE.set(key, null);
+      return null;
+    }
+
+    const data = await response.json();
+
+    const record = Array.isArray(data?.tokens)
+      ? data.tokens.find((item) => {
+          const address = item?.contract || item?.token || "";
+          return String(address).toLowerCase() === key;
+        })
+      : null;
+
+    const value = record?.createdBlock;
+
+    const createdBlock =
+      value != null && /^\d+$/.test(String(value))
+        ? String(value)
+        : null;
+
+    AELVORA_CREATED_BLOCK_CACHE.set(
+      key,
+      createdBlock
+    );
+
+    return createdBlock;
+  } catch {
+    AELVORA_CREATED_BLOCK_CACHE.set(key, null);
+    return null;
+  }
+}
+
+
+export async function resolveAelvoraToken(rawTokenAddress) {
+  const tokenAddress = String(rawTokenAddress || "").trim();
+
+  if (!isAddress(tokenAddress)) {
+    throw new Error("Invalid token contract address.");
+  }
+
+  let curveAddress = ZERO_ADDRESS;
+
+  try {
+    curveAddress = await publicClient.readContract({
+      address: FACTORY_ADDRESS,
+      abi: FACTORY_ABI,
+      functionName: "curveOf",
+      args: [tokenAddress],
+    });
+  } catch {
+    curveAddress = ZERO_ADDRESS;
+  }
+
+  const hasAelvoraCurve =
+    curveAddress &&
+    curveAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
+
+  /*
+   * AELVORA PRE-GRADUATION
+   * -----------------------------------------
+   * Bonding curve is the source of truth while
+   * the token is still trading on the curve.
+   */
+  if (hasAelvoraCurve) {
+    const [
+      priceData,
+      name,
+      symbol,
+      decimals,
+      totalSupply,
+      createdBlock,
+    ] = await Promise.all([
+        publicClient.readContract({
+          address: curveAddress,
+          abi: CURVE_ABI,
+          functionName: "priceData",
+        }),
+        publicClient.readContract({
+          address: tokenAddress,
+          abi: TOKEN_ABI,
+          functionName: "name",
+        }),
+        publicClient.readContract({
+          address: tokenAddress,
+          abi: TOKEN_ABI,
+          functionName: "symbol",
+        }),
+        publicClient.readContract({
+          address: tokenAddress,
+          abi: TOKEN_ABI,
+          functionName: "decimals",
+        }),
+        publicClient.readContract({
+          address: tokenAddress,
+          abi: TOKEN_ABI,
+          functionName: "totalSupply",
+        }),
+        getAelvoraCreatedBlock(tokenAddress),
+      ]);
+
+    const [
+      currentEthReserve,
+      currentTokenReserve,
+      volumeEth,
+      isGraduated,
+    ] = priceData;
+
+    const normalizedDecimals = Number(decimals);
+
+    const curvePrice = calculateCurvePrice(
+      currentEthReserve,
+      currentTokenReserve
+    );
+
+    /*
+     * IMPORTANT:
+     * Graduated AELVORA must now use DexScreener
+     * market data instead of returning null market
+     * fields.
+     */
+    if (Boolean(isGraduated)) {
+      const market = await getDexScreenerTokenData(tokenAddress);
+
+      const marketPrice = Number(
+        market.priceNative || 0
+      );
+
+      return {
+        token: tokenAddress,
+        curve: curveAddress,
+
+        name: String(name),
+        symbol: String(symbol),
+        decimals: normalizedDecimals,
+        totalSupply: totalSupply ?? 0n,
+
+        reserves: {
+          eth: currentEthReserve ?? 0n,
+          token: currentTokenReserve ?? 0n,
+        },
+
+        ethReserve: currentEthReserve ?? 0n,
+        tokenReserve: currentTokenReserve ?? 0n,
+
+        ethReserveFormatted: formatEther(
+          currentEthReserve ?? 0n
+        ),
+
+        tokenReserveFormatted: formatUnits(
+          currentTokenReserve ?? 0n,
+          normalizedDecimals
+        ),
+
+        volume: volumeEth ?? 0n,
+
+        /*
+         * DexScreener becomes the displayed market
+         * price after graduation.
+         *
+         * Fallback to curve price only if DexScreener
+         * has not returned a usable price yet.
+         */
+        price:
+          Number.isFinite(marketPrice) && marketPrice > 0
+            ? marketPrice
+            : curvePrice,
+
+        isGraduated: true,
+
+        isAelvora: true,
+        isGlobal: false,
+        routeType: "v4",
+
+        pairAddress: market.pairAddress,
+        dexId: market.dexId,
+        pairUrl: market.pairUrl,
+
+        priceNative: market.priceNative,
+        priceUsd: market.priceUsd,
+
+        liquidityUsd: market.liquidityUsd,
+        volume24h: market.volume24h,
+        priceChange24h: market.priceChange24h,
+
+        logoURI: market.logoURI,
+        websites: market.websites,
+        socials: market.socials,
+      };
+    }
+
+    /*
+     * AELVORA PRE-GRADUATION:
+     * keep bonding curve as the source of truth.
+     */
+    return {
+      token: tokenAddress,
+      curve: curveAddress,
+      createdBlock,
+
+      name: String(name),
+      symbol: String(symbol),
+      decimals: normalizedDecimals,
+      totalSupply: totalSupply ?? 0n,
+
+      reserves: {
+        eth: currentEthReserve ?? 0n,
+        token: currentTokenReserve ?? 0n,
+      },
+
+      ethReserve: currentEthReserve ?? 0n,
+      tokenReserve: currentTokenReserve ?? 0n,
+
+      ethReserveFormatted: formatEther(
+        currentEthReserve ?? 0n
+      ),
+
+      tokenReserveFormatted: formatUnits(
+        currentTokenReserve ?? 0n,
+        normalizedDecimals
+      ),
+
+      volume: volumeEth ?? 0n,
+
+      price: curvePrice,
+
+      isGraduated: false,
+
+      isAelvora: true,
+      isGlobal: false,
+      routeType: "curve",
+
+      pairAddress: null,
+      dexId: null,
+      pairUrl: null,
+
+      priceNative: null,
+      priceUsd: null,
+
+      liquidityUsd: null,
+      volume24h: null,
+      priceChange24h: null,
+
+      logoURI: null,
+      websites: [],
+      socials: [],
+    };
+  }
+
+  /*
+   * GLOBAL TOKEN
+   * -----------------------------------------
+   * Any non-AELVORA CA that has a DexScreener
+   * pair is resolved through DexScreener.
+   */
+  const market = await getDexScreenerTokenData(tokenAddress);
+
+  if (!market?.pairAddress) {
+    throw new Error("No supported market pair found for global token.");
+  }
+
+  /*
+   * GLOBAL TOKEN METADATA
+   * --------------------
+   * Resolve metadata from DexScreener instead of making
+   * direct name/symbol/decimals RPC calls for global tokens.
+   */
+  const tokenLower = tokenAddress.toLowerCase();
+
+  const matchingPool =
+    market.pools?.find((pool) => {
+      const base = String(pool?.baseToken || "").toLowerCase();
+      const quote = String(pool?.quoteToken || "").toLowerCase();
+
+      return base === tokenLower || quote === tokenLower;
+    }) || null;
+
+  const isBaseToken =
+    String(matchingPool?.baseToken || "").toLowerCase() === tokenLower;
+
+  const symbol =
+    isBaseToken
+      ? matchingPool?.baseTokenSymbol
+      : matchingPool?.quoteTokenSymbol;
+
+  const name =
+    isBaseToken
+      ? matchingPool?.baseTokenName
+      : matchingPool?.quoteTokenName;
+
+  /*
+   * GLOBAL TOKEN SUPPLY
+   * -------------------
+   * Read totalSupply + decimals only for Market Cap.
+   * Existing global swap logic remains unchanged.
+   */
+  let globalTotalSupply = 0n;
+  let globalDecimals = 18;
+
+  try {
+    [globalDecimals, globalTotalSupply] =
+      await Promise.all([
+        publicClient.readContract({
+          address: tokenAddress,
+          abi: TOKEN_ABI,
+          functionName: "decimals",
+        }),
+        publicClient.readContract({
+          address: tokenAddress,
+          abi: TOKEN_ABI,
+          functionName: "totalSupply",
+        }),
+      ]);
+
+    globalDecimals = Number(globalDecimals);
+  } catch (error) {
+    console.warn(
+      "[AELVORA] Global token supply read failed:",
+      error?.message || error
+    );
+
+    globalDecimals = 18;
+    globalTotalSupply = 0n;
+  }
+
+  const metadata = {
+    token: tokenAddress,
+    name: String(name || symbol || "Unknown Token"),
+    symbol: String(symbol || "TOKEN"),
+    decimals: 18,
+  };
+
+  let routeType = market.routeType || null;
+  let v3Pool = { pool: null, fee: null };
+  let v4Pool = null;
+
+  /*
+   * DexScreener V4 pairAddress is the bytes32 Pool ID.
+   * Resolve the actual PoolKey from Initialize.
+   */
+  if (routeType === "v4") {
+    v4Pool = await resolveV4PoolKey(market.pairAddress);
+  } else {
+    /*
+     * Only resolve our known Uniswap V3 factory when the selected
+     * market is an EVM-sized pool.
+     */
+    v3Pool = await resolveV3Pool(tokenAddress);
+
+    if (v3Pool.pool && v3Pool.fee != null) {
+      routeType = "v3";
+    }
+  }
+
+  return {
+    token: metadata.token,
+    curve: null,
+
+    name: metadata.name,
+    symbol: metadata.symbol,
+    decimals: metadata.decimals,
+
+    totalSupply: globalTotalSupply,
+
+    marketCapUsd:
+      globalTotalSupply > 0n &&
+      Number.isFinite(Number(market.priceUsd)) &&
+      Number(market.priceUsd) > 0
+        ? Number(
+            formatUnits(
+              globalTotalSupply,
+              globalDecimals
+            )
+          ) * Number(market.priceUsd)
+        : null,
+
+    reserves: {
+      eth: 0n,
+      token: 0n,
+    },
+
+    ethReserve: 0n,
+    tokenReserve: 0n,
+
+    ethReserveFormatted: "0",
+    tokenReserveFormatted: "0",
+
+    volume: 0n,
+
+    price: Number(market.priceNative || 0),
+
+    isGraduated: false,
+
+    isAelvora: false,
+    isGlobal: true,
+    routeType,
+
+    v3Pool: v3Pool.pool,
+    v3Fee: v3Pool.fee,
+
+    v4Pool: v4Pool,
+    v4PoolId:
+      routeType === "v4"
+        ? market.pairAddress
+        : null,
+
+    pairAddress: market.pairAddress,
+    dexId: market.dexId,
+    pairUrl: market.pairUrl,
+
+    priceNative: market.priceNative,
+    priceUsd: market.priceUsd,
+    marketCapUsd: market.marketCapUsd,
+
+    liquidityUsd: market.liquidityUsd,
+    volume24h: market.volume24h,
+    priceChange24h: market.priceChange24h,
+
+    logoURI: market.logoURI,
+    websites: market.websites,
+    socials: market.socials,
+  };
+}
+
+export async function getBuyQuote(curveAddress, ethGross) {
+  if (!isAddress(curveAddress)) {
+    throw new Error("Invalid curve address");
+  }
+
+  const result = await publicClient.readContract({
+    address: curveAddress,
+    abi: CURVE_ABI,
+    functionName: "quoteBuy",
+    args: [BigInt(ethGross)],
+  });
+
+  return {
+    tokensOut: result[0],
+    platformFee: result[1],
+    creatorFee: result[2],
+    ethToCurve: result[3],
+  };
+}
+
+export async function getSellQuote(curveAddress, tokenAmount) {
+  if (!isAddress(curveAddress)) {
+    throw new Error("Invalid curve address");
+  }
+
+  const result = await publicClient.readContract({
+    address: curveAddress,
+    abi: CURVE_ABI,
+    functionName: "quoteSell",
+    args: [BigInt(tokenAmount)],
+  });
+
+  return {
+    ethGross: result[0],
+    platformFee: result[1],
+    creatorFee: result[2],
+    ethToSeller: result[3],
+    amountOut: result[3],
+  };
+}
+
+export async function resolveV4PoolKeyFromToken(tokenAddress) {
+  const market = await getDexScreenerTokenData(tokenAddress);
+
+  if (!market?.pools?.length) {
+    throw new Error("No DexScreener pools found for token.");
+  }
+
+  /*
+   * Try V4 pools first, restricted to ETH/native quote.
+   */
+  const v4Candidates = market.pools.filter((pool) => {
+    const isV4 =
+      /^0x[a-fA-F0-9]{64}$/.test(
+        String(pool.pairAddress)
+      );
+
+    if (!isV4) return false;
+
+    const base = String(pool.baseToken || "").toLowerCase();
+    const quote = String(pool.quoteToken || "").toLowerCase();
+
+    return (
+      base === ZERO_ADDRESS.toLowerCase() ||
+      quote === ZERO_ADDRESS.toLowerCase()
+    );
+  });
+
+  if (!v4Candidates.length) {
+    throw new Error("No V4 ETH pool found for token.");
+  }
+
+  /*
+   * Highest-liquidity V4 ETH pool.
+   */
+  const selected = [...v4Candidates].sort(
+    (a, b) =>
+      Number(b.liquidityUsd || 0) -
+      Number(a.liquidityUsd || 0)
+  )[0];
+
+  return resolveV4PoolKey(selected.pairAddress);
+}
+
+export async function getV4BuyQuote(tokenAddress, ethGross, poolOverride = null) {
+  const amountIn = BigInt(ethGross);
+
+  if (amountIn <= 0n) {
+    throw new Error("Invalid ETH amount.");
+  }
+
+  /*
+   * IMPORTANT:
+   * Global V4 swaps do NOT use the AELVORA 0.10% router fee.
+   * Quote the actual ETH amount that enters the V4 pool.
+   */
+  let poolData = poolOverride;
+
+  if (
+    poolData?.poolId &&
+    !poolData.currency0
+  ) {
+    poolData = await resolveV4PoolKey(poolData.poolId);
+  }
+
+  if (!poolData) {
+    throw new Error("No selected V4 pool found.");
+  }
+
+  const poolKey = buildV4PoolKey(tokenAddress, poolData);
+
+  console.log("[AELVORA V4 SELL DEBUG INPUT]", {
+    tokenAddress,
+    tokenGross: amountIn.toString(),
+    tokenGrossHuman: Number(amountIn) / 1e18,
+    poolKey,
+    zeroForOne:
+      poolKey.currency1.toLowerCase() === tokenAddress.toLowerCase(),
+  });
+
+  const result = await publicClient.simulateContract({
+    address: V4_QUOTER,
+    abi: QUOTER_ABI,
+    functionName: "quoteExactInputSingle",
+    args: [
+      {
+        poolKey,
+        zeroForOne:
+          poolKey.currency0.toLowerCase() === ZERO_ADDRESS.toLowerCase(),
+        exactAmount: amountIn,
+        hookData: "0x",
+      },
+    ],
+  });
+
+  const amountOut = result.result?.[0] ?? result.result;
+
+  console.log(
+    "[AELVORA V4 SELL DEBUG OUTPUT]",
+    "amountOutWei=" + amountOut.toString(),
+    "amountOutETH=" + (Number(amountOut) / 1e18),
+    "gas=" + (result.result?.[1]?.toString() || "0")
+  );
+
+  return {
+    amountOut,
+    amountInToV4: amountIn,
+    routerFee: 0n,
+    gasEstimate: result.result?.[1] ?? 0n,
+    poolKey,
+    minimumReceived: calculateMinimumReceived(amountOut),
+  };
+}
+
+
+export async function getV4SellQuote(tokenAddress, tokenGross, poolOverride = null) {
+  const amountIn = BigInt(tokenGross);
+
+  if (amountIn <= 0n) {
+    throw new Error("Invalid token amount.");
+  }
+
+  let poolData = poolOverride;
+
+  if (
+    poolData?.poolId &&
+    !poolData.currency0
+  ) {
+    poolData = await resolveV4PoolKey(poolData.poolId);
+  }
+
+  if (!poolData) {
+    throw new Error("No selected V4 pool found.");
+  }
+
+  const poolKey = buildV4PoolKey(tokenAddress, poolData);
+
+  const result = await publicClient.simulateContract({
+    address: V4_QUOTER,
+    abi: QUOTER_ABI,
+    functionName: "quoteExactInputSingle",
+    args: [
+      {
+        poolKey,
+        zeroForOne:
+          poolKey.currency0.toLowerCase() === tokenAddress.toLowerCase(),
+        exactAmount: amountIn,
+        hookData: "0x",
+      },
+    ],
+  });
+
+  const amountOut = result.result?.[0] ?? result.result;
+
+  console.log("[AELVORA V4 SELL DEBUG OUTPUT]", {
+    amountOut: amountOut.toString(),
+    amountOutHuman: Number(amountOut) / 1e18,
+    gasEstimate: result.result?.[1]?.toString(),
+  });
+
+  return {
+    amountOut,
+    amountInToV4: amountIn,
+    routerFee: 0n,
+    gasEstimate: result.result?.[1] ?? 0n,
+    poolKey,
+    minimumReceived: calculateMinimumReceived(amountOut),
+  };
+}
+
+
+export async function getV3BuyQuote(tokenAddress, ethGross) {
+  const gross = BigInt(ethGross);
+
+  if (gross <= 0n) {
+    throw new Error("Invalid ETH amount.");
+  }
+
+  const { pool, fee } = await resolveV3Pool(tokenAddress);
+
+  if (!pool || fee == null) {
+    throw new Error("No Uniswap V3 WETH pool found for this token.");
+  }
+
+  const result = await publicClient.simulateContract({
+    address: V3_QUOTER,
+    abi: V3_QUOTER_ABI,
+    functionName: "quoteExactInputSingle",
+    args: [
+      {
+        tokenIn: WETH9,
+        tokenOut: tokenAddress,
+        amountIn: gross,
+        fee,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+
+  const [amountOut, , , gasEstimate] = result.result;
+
+  return {
+    amountOut,
+    gasEstimate,
+    fee,
+    pool,
+    minimumReceived: calculateMinimumReceived(amountOut),
+  };
+}
+
+export async function getV3SellQuote(tokenAddress, tokenGross) {
+  const gross = BigInt(tokenGross);
+
+  if (gross <= 0n) {
+    throw new Error("Invalid token amount.");
+  }
+
+  const { pool, fee } = await resolveV3Pool(tokenAddress);
+
+  if (!pool || fee == null) {
+    throw new Error("No Uniswap V3 WETH pool found for this token.");
+  }
+
+  const result = await publicClient.simulateContract({
+    address: V3_QUOTER,
+    abi: V3_QUOTER_ABI,
+    functionName: "quoteExactInputSingle",
+    args: [
+      {
+        tokenIn: tokenAddress,
+        tokenOut: WETH9,
+        amountIn: gross,
+        fee,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+
+  const [amountOut, , , gasEstimate] = result.result;
+
+  return {
+    amountOut,
+    gasEstimate,
+    fee,
+    pool,
+    minimumReceived: calculateMinimumReceived(amountOut),
+  };
+}
+
+export async function executeCurveBuy({
+  provider,
+  account,
+  curveAddress,
+  ethGross,
+}) {
+  const walletClient = getWalletClient(provider);
+
+  return walletClient.writeContract({
+    address: curveAddress,
+    abi: CURVE_ABI,
+    functionName: "buy",
+    account,
+    chain: ROBINHOOD_CHAIN,
+    value: BigInt(ethGross),
+  });
+}
+
+export async function executeCurveSell({
+  provider,
+  account,
+  tokenAddress,
+  curveAddress,
+  tokenAmount,
+}) {
+  const walletClient = getWalletClient(provider);
+  const amount = BigInt(tokenAmount);
+
+  const allowance = await publicClient.readContract({
+    address: tokenAddress,
+    abi: TOKEN_ABI,
+    functionName: "allowance",
+    args: [account, curveAddress],
+  });
+
+  if (allowance < amount) {
+    const approveHash = await walletClient.writeContract({
+      address: tokenAddress,
+      abi: TOKEN_ABI,
+      functionName: "approve",
+      args: [curveAddress, amount],
+      account,
+      chain: ROBINHOOD_CHAIN,
+    });
+
+    await publicClient.waitForTransactionReceipt({
+      hash: approveHash,
+    });
+  }
+
+  return walletClient.writeContract({
+    address: curveAddress,
+    abi: CURVE_ABI,
+    functionName: "sell",
+    args: [amount],
+    account,
+    chain: ROBINHOOD_CHAIN,
+  });
+}
+
+export async function executeV4Buy({
+  provider,
+  account,
+  tokenAddress,
+  ethGross,
+  minimumReceived,
+  poolOverride = null,
+}) {
+  const walletClient = getWalletClient(provider);
+
+  let poolData = poolOverride;
+
+  if (
+    poolData?.poolId &&
+    !poolData.currency0
+  ) {
+    poolData = await resolveV4PoolKey(poolData.poolId);
+  }
+
+  if (!poolData) {
+    throw new Error("No selected V4 pool found.");
+  }
+
+  const poolKey = buildV4PoolKey(tokenAddress, poolData);
+
+  return walletClient.writeContract({
+    address: AELVORA_SWAP_ROUTER,
+    abi: ROUTER_ABI,
+    functionName: "swapExactETHForTokens",
+    args: [
+      poolKey,
+      true,
+      BigInt(minimumReceived),
+      account,
+    ],
+    account,
+    chain: ROBINHOOD_CHAIN,
+    value: BigInt(ethGross),
+  });
+}
+
+export async function executeV4Sell({
+  provider,
+  account,
+  tokenAddress,
+  tokenAmount,
+  minimumReceived,
+  poolOverride = null,
+}) {
+  const walletClient = getWalletClient(provider);
+  const amount = BigInt(tokenAmount);
+
+  const allowance = await publicClient.readContract({
+    address: tokenAddress,
+    abi: TOKEN_ABI,
+    functionName: "allowance",
+    args: [account, AELVORA_SWAP_ROUTER],
+  });
+
+  if (allowance < amount) {
+    const approveHash = await walletClient.writeContract({
+      address: tokenAddress,
+      abi: TOKEN_ABI,
+      functionName: "approve",
+      args: [AELVORA_SWAP_ROUTER, amount],
+      account,
+      chain: ROBINHOOD_CHAIN,
+    });
+
+    await publicClient.waitForTransactionReceipt({
+      hash: approveHash,
+    });
+  }
+
+  let poolData = poolOverride;
+
+  if (
+    poolData?.poolId &&
+    !poolData.currency0
+  ) {
+    poolData = await resolveV4PoolKey(poolData.poolId);
+  }
+
+  if (!poolData) {
+    throw new Error("No selected V4 pool found.");
+  }
+
+  const poolKey = buildV4PoolKey(tokenAddress, poolData);
+
+  return walletClient.writeContract({
+    address: AELVORA_SWAP_ROUTER,
+    abi: ROUTER_ABI,
+    functionName: "swapExactTokensForTokens",
+    args: [
+      poolKey,
+      false,
+      amount,
+      BigInt(minimumReceived),
+      account,
+    ],
+    account,
+    chain: ROBINHOOD_CHAIN,
+  });
+}
+
+export async function executeV3Buy({
+  provider,
+  account,
+  tokenAddress,
+  ethGross,
+  minimumReceived,
+}) {
+  const walletClient = getWalletClient(provider);
+  const gross = BigInt(ethGross);
+  const minOut = BigInt(minimumReceived);
+
+  const { fee } = await resolveV3Pool(tokenAddress);
+
+  if (fee == null) {
+    throw new Error("No Uniswap V3 WETH pool found.");
+  }
+
+  return walletClient.writeContract({
+    address: V3_SWAP_ROUTER,
+    abi: V3_ROUTER_ABI,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: WETH9,
+        tokenOut: tokenAddress,
+        fee,
+        recipient: account,
+        amountIn: gross,
+        amountOutMinimum: minOut,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+    account,
+    chain: ROBINHOOD_CHAIN,
+    value: gross,
+  });
+}
+
+export async function executeV3Sell({
+  provider,
+  account,
+  tokenAddress,
+  tokenAmount,
+  minimumReceived,
+}) {
+  const walletClient = getWalletClient(provider);
+  const amount = BigInt(tokenAmount);
+  const minOut = BigInt(minimumReceived);
+
+  const { fee } = await resolveV3Pool(tokenAddress);
+  if (fee == null) throw new Error("No Uniswap V3 WETH pool found.");
+
+  const allowance = await publicClient.readContract({
+    address: tokenAddress,
+    abi: TOKEN_ABI,
+    functionName: "allowance",
+    args: [account, V3_SWAP_ROUTER],
+  });
+
+  if (allowance < amount) {
+    const approveHash = await walletClient.writeContract({
+      address: tokenAddress,
+      abi: TOKEN_ABI,
+      functionName: "approve",
+      args: [V3_SWAP_ROUTER, amount],
+      account,
+      chain: ROBINHOOD_CHAIN,
+    });
+
+    await publicClient.waitForTransactionReceipt({
+      hash: approveHash,
+    });
+  }
+
+  const swapData = encodeFunctionData({
+    abi: V3_ROUTER_ABI,
+    functionName: "exactInputSingle",
+    args: [{
+      tokenIn: tokenAddress,
+      tokenOut: WETH9,
+      fee,
+      recipient: V3_SWAP_ROUTER,
+      amountIn: amount,
+      amountOutMinimum: minOut,
+      sqrtPriceLimitX96: 0n,
+    }],
+  });
+
+  const unwrapData = encodeFunctionData({
+    abi: V3_ROUTER_ABI,
+    functionName: "unwrapWETH9",
+    args: [minOut, account],
+  });
+
+  return walletClient.writeContract({
+    address: V3_SWAP_ROUTER,
+    abi: V3_ROUTER_ABI,
+    functionName: "multicall",
+    args: [[swapData, unwrapData]],
+    account,
+    chain: ROBINHOOD_CHAIN,
+  });
+}
+
+export async function getTokenBalance(tokenAddress, account) {
+  if (!isAddress(tokenAddress) || !isAddress(account)) {
+    return 0n;
+  }
+
+  return publicClient.readContract({
+    address: tokenAddress,
+    abi: TOKEN_ABI,
+    functionName: "balanceOf",
+    args: [account],
+  });
+}

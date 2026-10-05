@@ -1,0 +1,359 @@
+export const SITE_CONFIG = {
+  /*
+   * ============================================================
+   * BRAND
+   * ============================================================
+   * Change the name/logo here.
+   */
+  brand: {
+    name: "AELVORA",
+    product: "Market",
+    fullName: "AELVORA Market",
+    tagline: "Launch. Trade. Evolve.",
+
+    logo: {
+      light: "/assets/logo.svg",
+      dark: "/assets/logo.svg",
+      icon: "/assets/logo-icon.svg",
+    },
+  },
+
+  /*
+   * ============================================================
+   * NAVIGATION
+   * ============================================================
+   */
+  navigation: [
+    {
+      label: "Launchpad",
+      href: "#launchpad",
+    },
+    {
+      label: "Explore",
+      href: "#explore",
+    },
+    {
+      label: "Trade",
+      href: "/swap",
+    },
+    {
+      label: "How It Works",
+      href: "#how-it-works",
+    },
+    {
+      label: "Fees",
+      href: "#fees",
+    },
+  ],
+
+  /*
+   * ============================================================
+   * HERO
+   * ============================================================
+   */
+  hero: {
+    eyebrow: "DECENTRALIZED TOKEN MARKET",
+
+    title: "Build the next",
+
+    highlight: "Market",
+
+    description:
+      "A simple launchpad where creators can launch tokens, communities can discover new markets, and everyone can trade transparently.",
+
+    primaryCta: {
+      label: "Launch a Token",
+      href: "#launchpad",
+    },
+
+    secondaryCta: {
+      label: "Explore Market",
+      href: "#explore",
+    },
+
+    status: {
+      label: "MARKET ENGINE",
+      value: "ON-CHAIN",
+    },
+  },
+
+  /*
+   * ============================================================
+   * PLATFORM
+   * ============================================================
+   */
+  platform: {
+    eyebrow: "BUILT FOR ON-CHAIN MARKETS",
+
+    title: "A launchpad designed around transparency.",
+
+    description:
+      "Creators launch tokens through a transparent bonding curve. Traders can participate directly in the market, while protocol and creator fees are handled automatically by the smart contract.",
+
+    features: [
+      {
+        number: "01",
+        title: "Create",
+        description:
+          "Deploy a token with configurable creator parameters and an on-chain market.",
+      },
+      {
+        number: "02",
+        title: "Trade",
+        description:
+          "Buy and sell directly through the bonding curve with transparent pricing.",
+      },
+      {
+        number: "03",
+        title: "Graduate",
+        description:
+          "When the market reaches its graduation target, liquidity transitions according to the protocol rules.",
+      },
+    ],
+  },
+
+  /*
+   * ============================================================
+   * LAUNCHPAD
+   * ============================================================
+   */
+  launchpad: {
+    title: "Launch your market",
+
+    description:
+      "Create a token, configure its creator fee, and open the market to the community.",
+
+    cta: "Create Token",
+
+    bondingCurve: {
+      enabled: true,
+      label: "Bonding Curve",
+      description:
+        "Token pricing follows an on-chain bonding curve throughout the launch phase.",
+    },
+
+    graduation: {
+      enabled: true,
+      label: "Graduation Target",
+      description:
+        "Once the market reaches its target, liquidity moves into the defined graduation mechanism.",
+    },
+
+    liquidity: {
+      mechanism: "BURN",
+      label: "Permanent Liquidity",
+      description:
+        "Graduated liquidity is permanently burned to remove future control over the liquidity position.",
+    },
+  },
+
+  /*
+   * ============================================================
+   * FEES
+   * ============================================================
+   *
+   * Protocol fee:
+   * AELVORA funding wallet.
+   *
+   * Creator fee:
+   * Assigned to the creator wallet and accumulated until claimed.
+   */
+  fees: {
+    currency: "ETH",
+
+    protocol: {
+      enabled: true,
+      default: 1,
+      label: "Protocol Fee",
+      recipient: "AELVORA Funding",
+    },
+
+    creator: {
+      enabled: true,
+      default: 2,
+      minimum: 0,
+      maximum: 5,
+      label: "Creator Fee",
+      recipient: "Token Creator",
+    },
+
+    display: {
+      showProtocolFee: true,
+      showCreatorFee: true,
+      showFeeCurrency: true,
+    },
+  },
+
+  /*
+   * ============================================================
+   * CONTRACTS
+   * ============================================================
+   *
+   * Isi address setelah smart contract sudah deployed.
+   */
+  contracts: {
+    chainId: 4663,
+    chainName: "Robinhood Chain",
+
+    factory: "",
+    router: "",
+
+    // Launch fee: 0.0003 ETH
+    launchFeeRecipient:
+      "0x75042Ab64A436C42C840A65A67245174A6F7fD68",
+
+    // 1% protocol trading fee
+    tradingFeeRecipient:
+      "0x42E6965d3DF3feD36d52212F8668AbD04f93f55b",
+
+    // Shared vault for creator-fee accounting
+    creatorFeeVault:
+      "0x2d5404a0335c3D9EB79E47a1B35FdAB2A3C48378",
+
+    feeCollector:
+      "0x42E6965d3DF3feD36d52212F8668AbD04f93f55b",
+
+    explorer: "https://robinhoodchain.blockscout.com",
+  },
+
+  /*
+   * ============================================================
+   * CREATOR REWARDS
+   * ============================================================
+   */
+  creatorRewards: {
+    enabled: true,
+
+    title: "Creator Rewards",
+
+    description:
+      "Creator fees accumulate on-chain and remain attributable to each creator until claimed.",
+
+    claimLabel: "Claim Rewards",
+
+    rules: [
+      "Rewards are tracked per creator.",
+      "Each creator can claim only their own accumulated balance.",
+      "Creator rewards may be held in a shared fee wallet while remaining separated by creator accounting.",
+    ],
+  },
+
+  /*
+   * ============================================================
+   * SOCIAL / EXTERNAL LINKS
+   * ============================================================
+   *
+   * Tinggal isi URL-nya nanti.
+   */
+  social: {
+    x: "https://t.me/aelvora_market",
+    telegram: "https://t.me/aelvora_market",
+    discord: "",
+  },
+
+  links: {
+    docs: "",
+    github: "",
+    terms: "",
+    privacy: "",
+  },
+
+  /*
+   * ============================================================
+   * GLOBAL CTA
+   * ============================================================
+   */
+  cta: {
+    connectWallet: {
+      label: "Connect Wallet",
+      enabled: true,
+    },
+
+    launch: {
+      label: "Launch a Token",
+      href: "#launchpad",
+      enabled: true,
+    },
+
+    explore: {
+      label: "Explore Market",
+      href: "#explore",
+      enabled: true,
+    },
+  },
+
+  /*
+   * ============================================================
+   * THEME
+   * ============================================================
+   *
+   * All primary website colors are controlled here.
+   */
+  theme: {
+    accent: "#00D395",
+    accentSoft: "#7CFFD7",
+
+    background: "#06100D",
+    backgroundAlt: "#081510",
+
+    surface: "#0A1713",
+    surfaceAlt: "#0E1D18",
+
+    border: "#18352B",
+
+    text: "#F3FFF9",
+    textSoft: "#C7D8D0",
+    muted: "#91A89E",
+
+    success: "#00D395",
+    danger: "#FF6B6B",
+    warning: "#F5C451",
+  },
+
+  /*
+   * ============================================================
+   * BACKGROUND
+   * ============================================================
+   *
+   * The background can be changed here without modifying components.
+   */
+  background: {
+    type: "gradient",
+
+    image: "",
+
+    overlay: true,
+
+    gradient:
+      "radial-gradient(circle at 75% 40%, rgba(0,211,149,0.12), transparent 30%), linear-gradient(135deg, #06100D 0%, #081510 50%, #06100D 100%)",
+
+    pattern: true,
+
+    animated: true,
+  },
+
+  /*
+   * ============================================================
+   * FOOTER
+   * ============================================================
+   */
+  footer: {
+    copyright: "© 2026 AELVORA Market. All rights reserved.",
+
+    disclaimer:
+      "AELVORA Market is an on-chain token launch and trading platform. Digital assets involve risk.",
+  },
+
+  /*
+   * ============================================================
+   * SITE METADATA
+   * ============================================================
+   */
+  metadata: {
+    title: "AELVORA Market — Launch. Trade. Evolve.",
+    description:
+      "A simple decentralized token launchpad and market built for transparent on-chain trading.",
+    keywords:
+      "AELVORA, AELVORA Market, launchpad, token launch, bonding curve, crypto market, Ethereum",
+  },
+};

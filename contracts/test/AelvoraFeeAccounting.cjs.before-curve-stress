@@ -1,0 +1,600 @@
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+describe("AELVORA Creator Fee Accounting", function () {
+  let owner;
+  let creatorA;
+  let creatorB;
+  let launchWallet;
+  let tradingWallet;
+
+  let vault;
+  let factory;
+
+  const LAUNCH_FEE = ethers.parseEther("0.0003");
+
+  beforeEach(async function () {
+    [
+      owner,
+      creatorA,
+      creatorB,
+      launchWallet,
+      tradingWallet,
+    ] = await ethers.getSigners();
+
+    // ------------------------------------------------------------
+    // Deploy Factory
+    // Factory otomatis membuat CreatorFeeVault.
+    // ------------------------------------------------------------
+    const Factory = await ethers.getContractFactory(
+      "AelvoraFactory"
+    );
+
+    factory = await Factory.deploy(
+      launchWallet.address,
+      tradingWallet.address
+    );
+
+    await factory.waitForDeployment();
+
+    // Ambil address Vault yang dibuat Factory.
+    const vaultAddress = await factory.creatorFeeVault();
+
+    vault = await ethers.getContractAt(
+      "AelvoraCreatorFeeVault",
+      vaultAddress
+    );
+  });
+
+  async function fundCurve(curveAddress) {
+    await ethers.provider.send("hardhat_setBalance", [
+      curveAddress,
+      ethers.toBeHex(ethers.parseEther("1")),
+    ]);
+  }
+
+  async function createToken(
+    creator,
+    name,
+    symbol,
+    creatorTaxBps = 200
+  ) {
+    const tx = await factory.connect(creator).createToken(
+      name,
+      symbol,
+      ethers.parseUnits("100000", 18),
+      creatorTaxBps,
+      {
+        value: LAUNCH_FEE,
+      }
+    );
+
+    const receipt = await tx.wait();
+
+    const event = receipt.logs
+      .map((log) => {
+        try {
+          return factory.interface.parseLog(log);
+        } catch {
+          return null;
+        }
+      })
+      .find(
+        (event) => event && event.name === "TokenCreated"
+      );
+
+    return {
+      token: event.args.token,
+      creator: event.args.creator,
+      curve: event.args.curve,
+    };
+  }
+
+  it("deploys Factory with its own CreatorFeeVault", async function () {
+    expect(await vault.factory()).to.equal(
+      await factory.getAddress()
+    );
+  });
+
+  it("uses connected wallet as creator", async function () {
+    const token = await createToken(
+      creatorA,
+      "Creator A Token",
+      "CAT"
+    );
+
+    expect(token.creator).to.equal(
+      creatorA.address
+    );
+
+    expect(
+      await vault.curveCreator(token.curve)
+    ).to.equal(creatorA.address);
+  });
+
+  it("keeps two tokens from the same creator completely separate", async function () {
+    const tokenA = await createToken(
+      creatorA,
+      "Token A",
+      "TKA"
+    );
+
+    const tokenB = await createToken(
+      creatorA,
+      "Token B",
+      "TKB"
+    );
+
+    // Simulasikan fee Token A.
+    await factory
+      .connect(owner)
+      .creatorFeeVault();
+
+    await ethers.provider.send("hardhat_setBalance", [
+      await vault.getAddress(),
+      ethers.toBeHex(
+        ethers.parseEther("10")
+      ),
+    ]);
+
+    // Hanya curve yang terdaftar boleh accrue.
+    await ethers.provider.send("hardhat_impersonateAccount", [
+      tokenA.curve,
+    ]);
+
+    await fundCurve(tokenA.curve);
+
+    const curveA = await ethers.getSigner(
+      tokenA.curve
+    );
+
+    await vault
+      .connect(curveA)
+      .accrueCreatorFee(
+        tokenA.token,
+        creatorA.address,
+        {
+          value: ethers.parseEther("0.10"),
+        }
+      );
+
+    await ethers.provider.send("hardhat_stopImpersonatingAccount", [
+      tokenA.curve,
+    ]);
+
+    expect(
+      await vault.claimable(
+        tokenA.token,
+        creatorA.address
+      )
+    ).to.equal(
+      ethers.parseEther("0.10")
+    );
+
+    expect(
+      await vault.claimable(
+        tokenB.token,
+        creatorA.address
+      )
+    ).to.equal(0);
+  });
+
+  it("different creators have separate accounting", async function () {
+    const tokenA = await createToken(
+      creatorA,
+      "Token A",
+      "TKA"
+    );
+
+    const tokenB = await createToken(
+      creatorB,
+      "Token B",
+      "TKB"
+    );
+
+    await ethers.provider.send("hardhat_setBalance", [
+      await vault.getAddress(),
+      ethers.toBeHex(
+        ethers.parseEther("10")
+      ),
+    ]);
+
+    await ethers.provider.send("hardhat_impersonateAccount", [
+      tokenA.curve,
+    ]);
+
+    await fundCurve(tokenA.curve);
+
+    const curveA = await ethers.getSigner(
+      tokenA.curve
+    );
+
+    await vault
+      .connect(curveA)
+      .accrueCreatorFee(
+        tokenA.token,
+        creatorA.address,
+        {
+          value: ethers.parseEther("0.20"),
+        }
+      );
+
+    await ethers.provider.send("hardhat_stopImpersonatingAccount", [
+      tokenA.curve,
+    ]);
+
+    await ethers.provider.send("hardhat_impersonateAccount", [
+      tokenB.curve,
+    ]);
+
+    await fundCurve(tokenB.curve);
+
+    const curveB = await ethers.getSigner(
+      tokenB.curve
+    );
+
+    await vault
+      .connect(curveB)
+      .accrueCreatorFee(
+        tokenB.token,
+        creatorB.address,
+        {
+          value: ethers.parseEther("0.30"),
+        }
+      );
+
+    await ethers.provider.send("hardhat_stopImpersonatingAccount", [
+      tokenB.curve,
+    ]);
+
+    expect(
+      await vault.claimable(
+        tokenA.token,
+        creatorA.address
+      )
+    ).to.equal(
+      ethers.parseEther("0.20")
+    );
+
+    expect(
+      await vault.claimable(
+        tokenB.token,
+        creatorB.address
+      )
+    ).to.equal(
+      ethers.parseEther("0.30")
+    );
+
+    // Cross-claim tidak boleh ada.
+    expect(
+      await vault.claimable(
+        tokenA.token,
+        creatorB.address
+      )
+    ).to.equal(0);
+
+    expect(
+      await vault.claimable(
+        tokenB.token,
+        creatorA.address
+      )
+    ).to.equal(0);
+  });
+
+  it("prevents unauthorized accounts from accruing creator fees", async function () {
+    const token = await createToken(
+      creatorA,
+      "Token A",
+      "TKA"
+    );
+
+    await expect(
+      vault
+        .connect(owner)
+        .accrueCreatorFee(
+          token.token,
+          creatorA.address,
+          {
+            value: ethers.parseEther("1"),
+          }
+        )
+    ).to.be.revertedWithCustomError(
+      vault,
+      "OnlyRegisteredCurve"
+    );
+  });
+
+  it("prevents double claim", async function () {
+    const token = await createToken(
+      creatorA,
+      "Token A",
+      "TKA"
+    );
+
+    await ethers.provider.send("hardhat_setBalance", [
+      await vault.getAddress(),
+      ethers.toBeHex(
+        ethers.parseEther("10")
+      ),
+    ]);
+
+    await ethers.provider.send("hardhat_impersonateAccount", [
+      token.curve,
+    ]);
+
+    await fundCurve(token.curve);
+
+    const curve = await ethers.getSigner(
+      token.curve
+    );
+
+    await vault
+      .connect(curve)
+      .accrueCreatorFee(
+        token.token,
+        creatorA.address,
+        {
+          value: ethers.parseEther("0.25"),
+        }
+      );
+
+    await ethers.provider.send("hardhat_stopImpersonatingAccount", [
+      token.curve,
+    ]);
+
+    await vault
+      .connect(creatorA)
+      .claim(token.token);
+
+    expect(
+      await vault.claimable(
+        token.token,
+        creatorA.address
+      )
+    ).to.equal(0);
+
+    await expect(
+      vault
+        .connect(creatorA)
+        .claim(token.token)
+    ).to.be.revertedWithCustomError(
+      vault,
+      "NoRewards"
+    );
+  });
+
+  it("enforces 5 minute claim cooldown", async function () {
+    const token = await createToken(
+      creatorA,
+      "Token A",
+      "TKA"
+    );
+
+    await ethers.provider.send("hardhat_setBalance", [
+      await vault.getAddress(),
+      ethers.toBeHex(
+        ethers.parseEther("10")
+      ),
+    ]);
+
+    await ethers.provider.send("hardhat_impersonateAccount", [
+      token.curve,
+    ]);
+
+    await fundCurve(token.curve);
+
+    const curve = await ethers.getSigner(
+      token.curve
+    );
+
+    await vault
+      .connect(curve)
+      .accrueCreatorFee(
+        token.token,
+        creatorA.address,
+        {
+          value: ethers.parseEther("0.10"),
+        }
+      );
+
+    await ethers.provider.send("hardhat_stopImpersonatingAccount", [
+      token.curve,
+    ]);
+
+    await vault
+      .connect(creatorA)
+      .claim(token.token);
+
+    // Fee baru masuk setelah claim.
+    await ethers.provider.send("hardhat_impersonateAccount", [
+      token.curve,
+    ]);
+
+    await fundCurve(token.curve);
+
+    await vault
+      .connect(curve)
+      .accrueCreatorFee(
+        token.token,
+        creatorA.address,
+        {
+          value: ethers.parseEther("0.05"),
+        }
+      );
+
+    await ethers.provider.send("hardhat_stopImpersonatingAccount", [
+      token.curve,
+    ]);
+
+    expect(
+      await vault.claimable(
+        token.token,
+        creatorA.address
+      )
+    ).to.equal(
+      ethers.parseEther("0.05")
+    );
+
+    await expect(
+      vault
+        .connect(creatorA)
+        .claim(token.token)
+    ).to.be.revertedWithCustomError(
+      vault,
+      "ClaimCooldown"
+    );
+
+    // Lewati 5 menit.
+    await ethers.provider.send("evm_increaseTime", [
+      5 * 60,
+    ]);
+
+    await ethers.provider.send("evm_mine");
+
+    await vault
+      .connect(creatorA)
+      .claim(token.token);
+
+    expect(
+      await vault.claimable(
+        token.token,
+        creatorA.address
+      )
+    ).to.equal(0);
+  });
+
+  it("BUY sends creator tax to CreatorFeeVault", async function () {
+    const tokenData = await createToken(
+      creatorA,
+      "Buy Fee Token",
+      "BFT",
+      200
+    );
+
+    const curve = await ethers.getContractAt(
+      "AelvoraBondingCurve",
+      tokenData.curve
+    );
+
+    const buyAmount = ethers.parseEther("0.01");
+
+    const quote = await curve.quoteBuy(buyAmount);
+
+    console.log("DEBUG BUY:");
+    console.log("  tokenReserve =", (await curve.tokenReserve()).toString());
+    console.log("  tokensOut    =", quote.tokensOut.toString());
+    console.log("  ethToCurve   =", quote.ethToCurve.toString());
+    console.log("  creatorFee   =", quote.creatorFee.toString());
+
+    expect(quote.creatorFee).to.equal(
+      ethers.parseEther("0.0002")
+    );
+
+    await curve
+      .connect(creatorB)
+      .buy({ value: buyAmount });
+
+    expect(
+      await vault.claimable(
+        tokenData.token,
+        creatorA.address
+      )
+    ).to.equal(ethers.parseEther("0.0002"));
+  });
+
+  it("SELL quote never exceeds real ETH reserve", async function () {
+    const tokenData = await createToken(
+      creatorA,
+      "Liquidity Audit Token",
+      "LAT",
+      200
+    );
+
+    const curve = await ethers.getContractAt(
+      "AelvoraBondingCurve",
+      tokenData.curve
+    );
+
+    const buyAmount = ethers.parseEther("0.01");
+
+    await curve
+      .connect(creatorB)
+      .buy({ value: buyAmount });
+
+    const realEthReserve = await curve.ethReserve();
+
+    const tokenContract = await ethers.getContractAt(
+      "AelvoraToken",
+      tokenData.token
+    );
+
+    const tokenBalance = await tokenContract.balanceOf(
+      creatorB.address
+    );
+
+    const sellAmount = tokenBalance / 2n;
+
+    const quote = await curve.quoteSell(sellAmount);
+
+    console.log("DEBUG SELL:");
+    console.log("  realEthReserve =", realEthReserve.toString());
+    console.log("  ethGross       =", quote.ethGross.toString());
+    console.log("  vaultBalance   =", (await ethers.provider.getBalance(await vault.getAddress())).toString());
+
+    expect(quote.ethGross).to.be.lte(realEthReserve);
+  });
+
+  it("SELL sends creator tax to CreatorFeeVault", async function () {
+    const tokenData = await createToken(
+      creatorA,
+      "Sell Fee Token",
+      "SFT",
+      200
+    );
+
+    const curve = await ethers.getContractAt(
+      "AelvoraBondingCurve",
+      tokenData.curve
+    );
+
+    const buyAmount = ethers.parseEther("0.01");
+
+    await curve
+      .connect(creatorB)
+      .buy({ value: buyAmount });
+
+    const tokenContract = await ethers.getContractAt(
+      "AelvoraToken",
+      tokenData.token
+    );
+
+    const tokenBalance = await tokenContract.balanceOf(
+      creatorB.address
+    );
+
+    const sellAmount = tokenBalance / 2n;
+
+    const quote = await curve.quoteSell(sellAmount);
+
+    const before = await vault.claimable(
+      tokenData.token,
+      creatorA.address
+    );
+
+    await tokenContract
+      .connect(creatorB)
+      .approve(tokenData.curve, sellAmount);
+
+    await curve
+      .connect(creatorB)
+      .sell(sellAmount);
+
+    const after = await vault.claimable(
+      tokenData.token,
+      creatorA.address
+    );
+
+    expect(after - before).to.equal(
+      quote.creatorFee
+    );
+  });});

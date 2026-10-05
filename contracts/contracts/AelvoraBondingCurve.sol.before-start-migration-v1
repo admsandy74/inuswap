@@ -1,0 +1,773 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+interface IAelvoraCreatorFeeVault {
+    function accrueCreatorFee(
+        address token,
+        address creator
+    ) external payable;
+}
+
+contract AelvoraBondingCurve is ReentrancyGuard {
+    uint256 public constant GRADUATION_TARGET = 3 ether;
+    uint256 public constant VIRTUAL_ETH_RESERVE = 1 ether;
+
+    // Supply allocation:
+    // 75% = bonding curve inventory
+    // 25% = graduation / future LP reserve
+    uint256 public constant CURVE_SUPPLY_BPS = 7500;
+    uint256 public constant GRADUATION_SUPPLY_BPS = 2500;
+
+    uint256 public constant PLATFORM_FEE_BPS = 100;
+    uint256 public constant BPS = 10_000;
+    uint256 public constant MAX_CREATOR_TAX_BPS = 500;
+
+    IERC20 public immutable token;
+
+    address public immutable factory;
+    address public immutable creator;
+    address public immutable tradingFeeRecipient;
+    address public immutable creatorFeeVault;
+
+    uint256 public immutable creatorTaxBps;
+
+    uint256 public ethReserve;
+
+    // Only the 75% curve allocation is used by the bonding curve.
+    uint256 public tokenReserve;
+
+    // The remaining 25% is reserved for graduation / LP.
+    uint256 public graduationTokenReserve;
+
+    uint256 public totalVolumeEth;
+    uint256 public totalBuyVolumeEth;
+    uint256 public totalSellVolumeEth;
+
+    bool public graduated;
+
+    // Migration lifecycle.
+    //
+    // graduated:
+    //   Graduation threshold has been reached.
+    //
+    // migrationStarted:
+    //   Bonding curve is frozen and its assets are
+    //   reserved for DEX migration.
+    //
+    // migrationCompleted:
+    //   Assets have been handed off successfully.
+    bool public migrationStarted;
+    bool public migrationCompleted;
+
+    uint256 public migrationEthAmount;
+    uint256 public migrationTokenAmount;
+
+    error OnlyFactory();
+    error ZeroAddress();
+    error InvalidCreatorTax();
+    error InvalidAmount();
+    error InsufficientTokenLiquidity();
+    error InsufficientEthLiquidity();
+    error GraduationReached();
+    error AlreadyInitialized();
+    error TransferFailed();
+    error FeeTransferFailed();
+    error VaultAccrualFailed();
+
+    event Bought(
+        address indexed buyer,
+        uint256 ethGross,
+        uint256 platformFee,
+        uint256 creatorFee,
+        uint256 ethToCurve,
+        uint256 tokensOut
+    );
+
+    event Sold(
+        address indexed seller,
+        uint256 tokensIn,
+        uint256 ethGross,
+        uint256 platformFee,
+        uint256 creatorFee,
+        uint256 ethToSeller
+    );
+
+    event Graduated(
+        uint256 ethReserve,
+        uint256 tokenReserve
+    );
+
+    constructor(
+        address token_,
+        address creator_,
+        address tradingFeeRecipient_,
+        address creatorFeeVault_,
+        uint256 creatorTaxBps_
+    ) {
+        if (
+            token_ == address(0) ||
+            creator_ == address(0) ||
+            tradingFeeRecipient_ == address(0) ||
+            creatorFeeVault_ == address(0)
+        ) {
+            revert ZeroAddress();
+        }
+
+        if (creatorTaxBps_ > MAX_CREATOR_TAX_BPS) {
+            revert InvalidCreatorTax();
+        }
+
+        token = IERC20(token_);
+        factory = msg.sender;
+        creator = creator_;
+        tradingFeeRecipient = tradingFeeRecipient_;
+        creatorFeeVault = creatorFeeVault_;
+        creatorTaxBps = creatorTaxBps_;
+    }
+
+    modifier onlyFactory() {
+        if (msg.sender != factory) {
+            revert OnlyFactory();
+        }
+        _;
+    }
+
+    /*
+     * Factory sends the initial token inventory here.
+     */
+    function initializeLiquidity(
+        uint256 tokenAmount
+    ) external onlyFactory {
+        if (tokenReserve != 0 || ethReserve != 0) {
+            revert AlreadyInitialized();
+        }
+
+        if (tokenAmount == 0) {
+            revert InvalidAmount();
+        }
+
+        bool success = token.transferFrom(
+            factory,
+            address(this),
+            tokenAmount
+        );
+
+        if (!success) {
+            revert TransferFailed();
+        }
+
+        // Full supply is physically transferred into the curve.
+        //
+        // However, only 75% becomes active bonding-curve
+        // inventory. The remaining 25% is reserved for
+        // graduation / future Uniswap V4 LP.
+        uint256 curveAllocation =
+            (tokenAmount * CURVE_SUPPLY_BPS) / BPS;
+
+        uint256 graduationAllocation =
+            tokenAmount - curveAllocation;
+
+        if (curveAllocation == 0 || graduationAllocation == 0) {
+            revert InvalidAmount();
+        }
+
+        tokenReserve = curveAllocation;
+        graduationTokenReserve = graduationAllocation;
+    }
+
+    /*
+     * BUY
+     *
+     * Gross ETH:
+     *
+     *   1%              -> trading fee wallet
+     *   creator tax     -> creator fee vault
+     *   remainder       -> curve reserve
+     *
+     * Graduation is based on the net ETH actually entering
+     * the bonding curve.
+     *
+     * IMPORTANT:
+     * Buy remains available after graduation.
+     * Graduation only marks that the 3 ETH threshold was reached.
+     */
+    function buy()
+        external
+        payable
+        nonReentrant
+        returns (uint256 tokensOut)
+    {
+        tokensOut = _buyFor(msg.sender, msg.value);
+    }
+
+    /*
+     * Factory-only first buy.
+     *
+     * The Factory uses this during token creation so the creator
+     * is the actual beneficiary of the mandatory first purchase.
+     */
+    function buyFor(
+        address buyer
+    )
+        external
+        payable
+        onlyFactory
+        nonReentrant
+        returns (uint256 tokensOut)
+    {
+        if (buyer == address(0)) {
+            revert ZeroAddress();
+        }
+
+        tokensOut = _buyFor(buyer, msg.value);
+    }
+
+    function _buyFor(
+        address buyer,
+        uint256 ethGross
+    )
+        internal
+        returns (uint256 tokensOut)
+    {
+        if (migrationStarted || migrationCompleted) {
+            revert GraduationReached();
+        }
+
+        if (buyer == address(0) || ethGross == 0) {
+            revert InvalidAmount();
+        }
+
+        uint256 platformFee =
+            (ethGross * PLATFORM_FEE_BPS) / BPS;
+
+        uint256 creatorFee =
+            (ethGross * creatorTaxBps) / BPS;
+
+        uint256 ethToCurve =
+            ethGross - platformFee - creatorFee;
+
+        if (ethToCurve == 0) {
+            revert InvalidAmount();
+        }
+
+        tokensOut = _quoteBuy(ethToCurve);
+
+        if (
+            tokensOut == 0 ||
+            tokensOut >= tokenReserve
+        ) {
+            revert InsufficientTokenLiquidity();
+        }
+
+        /*
+         * Update curve accounting before external calls.
+         */
+        tokenReserve -= tokensOut;
+        ethReserve += ethToCurve;
+
+        totalVolumeEth += ethToCurve;
+        totalBuyVolumeEth += ethToCurve;
+
+        if (
+            !graduated &&
+            ethReserve >= GRADUATION_TARGET
+        ) {
+            graduated = true;
+
+            emit Graduated(
+                ethReserve,
+                tokenReserve
+            );
+        }
+
+        if (platformFee > 0) {
+            _sendETH(
+                tradingFeeRecipient,
+                platformFee
+            );
+        }
+
+        if (creatorFee > 0) {
+            _accrueCreatorFee(creatorFee);
+        }
+
+        bool success = token.transfer(
+            buyer,
+            tokensOut
+        );
+
+        if (!success) {
+            revert TransferFailed();
+        }
+
+        emit Bought(
+            buyer,
+            ethGross,
+            platformFee,
+            creatorFee,
+            ethToCurve,
+            tokensOut
+        );
+    }
+
+    /*
+     * SELL
+     *
+     * Curve calculates gross ETH returned.
+     *
+     *   gross ETH
+     *      ├─ 1% protocol fee
+     *      ├─ creator tax
+     *      └─ remainder -> seller
+     *
+     * Creator fee continues after graduation.
+     */
+    function sell(
+        uint256 tokenAmount
+    )
+        external
+        nonReentrant
+        returns (uint256 ethToSeller)
+    {
+        if (migrationStarted || migrationCompleted) {
+            revert GraduationReached();
+        }
+
+        if (tokenAmount == 0) {
+            revert InvalidAmount();
+        }
+
+        if (tokenAmount >= tokenReserve) {
+            revert InsufficientTokenLiquidity();
+        }
+
+        uint256 ethGross =
+            _quoteSell(tokenAmount);
+
+        if (
+            ethGross == 0 ||
+            ethGross > ethReserve
+        ) {
+            revert InsufficientEthLiquidity();
+        }
+
+        uint256 platformFee =
+            (ethGross * PLATFORM_FEE_BPS) / BPS;
+
+        uint256 creatorFee =
+            (ethGross * creatorTaxBps) / BPS;
+
+        ethToSeller =
+            ethGross -
+            platformFee -
+            creatorFee;
+
+        if (ethToSeller == 0) {
+            revert InvalidAmount();
+        }
+
+        /*
+         * Take seller tokens first.
+         */
+        bool tokenSuccess = token.transferFrom(
+            msg.sender,
+            address(this),
+            tokenAmount
+        );
+
+        if (!tokenSuccess) {
+            revert TransferFailed();
+        }
+
+        /*
+         * Update reserves/accounting before ETH calls.
+         */
+        ethReserve -= ethGross;
+        tokenReserve += tokenAmount;
+
+        totalVolumeEth += ethGross;
+        totalSellVolumeEth += ethGross;
+
+        if (platformFee > 0) {
+            _sendETH(
+                tradingFeeRecipient,
+                platformFee
+            );
+        }
+
+        if (creatorFee > 0) {
+            _accrueCreatorFee(creatorFee);
+        }
+
+        _sendETH(
+            msg.sender,
+            ethToSeller
+        );
+
+        emit Sold(
+            msg.sender,
+            tokenAmount,
+            ethGross,
+            platformFee,
+            creatorFee,
+            ethToSeller
+        );
+    }
+
+    /*
+     * START MIGRATION
+     *
+     * Graduation and migration are deliberately separate.
+     *
+     * The final BUY may overshoot the 3 ETH graduation target.
+     * That entire transaction is completed first.
+     *
+     * Only after that can Factory start migration.
+     *
+     * Snapshot:
+     *
+     *   ETH:
+     *       actual ethReserve
+     *
+     *   Tokens:
+     *       remaining active curve inventory
+     *       + graduation reserve
+     *
+     * The 25% graduation reserve remains untouched until
+     * this migration snapshot.
+     */
+    function startMigration()
+        external
+        onlyFactory
+    {
+        if (!graduated) {
+            revert GraduationReached();
+        }
+
+        if (migrationStarted || migrationCompleted) {
+            revert AlreadyInitialized();
+        }
+
+        uint256 activeTokens =
+            tokenReserve;
+
+        uint256 graduationTokens =
+            graduationTokenReserve;
+
+        uint256 totalMigrationTokens =
+            activeTokens +
+            graduationTokens;
+
+        if (
+            ethReserve == 0 ||
+            totalMigrationTokens == 0
+        ) {
+            revert InvalidAmount();
+        }
+
+        /*
+         * Freeze the curve BEFORE exposing the snapshot.
+         */
+        migrationStarted = true;
+
+        /*
+         * Snapshot actual assets.
+         *
+         * ETH uses the real curve reserve.
+         * It is NOT capped at GRADUATION_TARGET.
+         */
+        migrationEthAmount = ethReserve;
+
+        migrationTokenAmount =
+            totalMigrationTokens;
+    }
+
+    /*
+     * Migration completion is intentionally Factory-only.
+     *
+     * The actual V4 handoff will be added later through
+     * the migration manager.
+     */
+    function completeMigration()
+        external
+        onlyFactory
+    {
+        if (!migrationStarted) {
+            revert InvalidAmount();
+        }
+
+        if (migrationCompleted) {
+            revert AlreadyInitialized();
+        }
+
+        migrationCompleted = true;
+    }
+
+    function quoteBuy(
+        uint256 ethGross
+    )
+        external
+        view
+        returns (
+            uint256 tokensOut,
+            uint256 platformFee,
+            uint256 creatorFee,
+            uint256 ethToCurve
+        )
+    {
+        if (ethGross == 0) {
+            return (
+                0,
+                0,
+                0,
+                0
+            );
+        }
+
+        platformFee =
+            (ethGross * PLATFORM_FEE_BPS) / BPS;
+
+        creatorFee =
+            (ethGross * creatorTaxBps) / BPS;
+
+        ethToCurve =
+            ethGross -
+            platformFee -
+            creatorFee;
+
+        if (ethToCurve > 0) {
+            tokensOut =
+                _quoteBuy(ethToCurve);
+        }
+    }
+
+    function quoteSell(
+        uint256 tokenAmount
+    )
+        external
+        view
+        returns (
+            uint256 ethGross,
+            uint256 platformFee,
+            uint256 creatorFee,
+            uint256 ethToSeller
+        )
+    {
+        if (tokenAmount == 0) {
+            return (
+                0,
+                0,
+                0,
+                0
+            );
+        }
+
+        ethGross =
+            _quoteSell(tokenAmount);
+
+        platformFee =
+            (ethGross * PLATFORM_FEE_BPS) / BPS;
+
+        creatorFee =
+            (ethGross * creatorTaxBps) / BPS;
+
+        ethToSeller =
+            ethGross -
+            platformFee -
+            creatorFee;
+    }
+
+    function priceData()
+        external
+        view
+        returns (
+            uint256 currentEthReserve,
+            uint256 currentTokenReserve,
+            uint256 volumeEth,
+            bool isGraduated
+        )
+    {
+        return (
+            ethReserve,
+            tokenReserve,
+            totalVolumeEth,
+            graduated
+        );
+    }
+
+    function remainingToGraduation()
+        external
+        view
+        returns (uint256)
+    {
+        if (graduated) {
+            return 0;
+        }
+
+        if (ethReserve >= GRADUATION_TARGET) {
+            return 0;
+        }
+
+        return GRADUATION_TARGET - ethReserve;
+    }
+
+    /*
+     * Returns the supply allocation.
+     *
+     * tokenReserve:
+     *     Active bonding-curve inventory.
+     *
+     * graduationTokenReserve:
+     *     25% allocation reserved for graduation / LP.
+     */
+    function supplyAllocation()
+        external
+        view
+        returns (
+            uint256 activeCurveTokens,
+            uint256 graduationTokens
+        )
+    {
+        return (
+            tokenReserve,
+            graduationTokenReserve
+        );
+    }
+
+    function _accrueCreatorFee(
+        uint256 amount
+    ) internal {
+        try
+            IAelvoraCreatorFeeVault(
+                creatorFeeVault
+            ).accrueCreatorFee{
+                value: amount
+            }(
+                address(token),
+                creator
+            )
+        {
+        } catch {
+            revert VaultAccrualFailed();
+        }
+    }
+
+    function _sendETH(
+        address recipient,
+        uint256 amount
+    ) internal {
+        (bool success, ) =
+            payable(recipient).call{
+                value: amount
+            }("");
+
+        if (!success) {
+            revert FeeTransferFailed();
+        }
+    }
+
+    /*
+     * Constant-product curve:
+     *
+     * k = ETH reserve * token reserve
+     *
+     * BUY:
+     * newTokenReserve = k / newEthReserve
+     */
+    function _quoteBuy(
+        uint256 ethIn
+    )
+        internal
+        view
+        returns (uint256)
+    {
+        if (
+            tokenReserve == 0 ||
+            ethIn == 0
+        ) {
+            return 0;
+        }
+
+        uint256 effectiveEthReserve =
+            VIRTUAL_ETH_RESERVE + ethReserve;
+
+        uint256 k =
+            effectiveEthReserve * tokenReserve;
+
+        uint256 newEffectiveEthReserve =
+            effectiveEthReserve + ethIn;
+
+        uint256 newTokenReserve =
+            k / newEffectiveEthReserve;
+
+        if (
+            newTokenReserve >= tokenReserve
+        ) {
+            return 0;
+        }
+
+        return
+            tokenReserve -
+            newTokenReserve;
+    }
+
+    /*
+     * SELL:
+     *
+     * newTokenReserve =
+     *     tokenReserve + tokenIn
+     *
+     * newEthReserve =
+     *     k / newTokenReserve
+     *
+     * ETH returned =
+     *     ethReserve - newEthReserve
+     */
+    function _quoteSell(
+        uint256 tokenIn
+    )
+        internal
+        view
+        returns (uint256)
+    {
+        if (
+            ethReserve == 0 ||
+            tokenReserve == 0 ||
+            tokenIn == 0 ||
+            tokenIn >= tokenReserve
+        ) {
+            return 0;
+        }
+
+        uint256 effectiveEthReserve =
+            VIRTUAL_ETH_RESERVE + ethReserve;
+
+        uint256 k =
+            effectiveEthReserve * tokenReserve;
+
+        uint256 newTokenReserve =
+            tokenReserve + tokenIn;
+
+        uint256 newEffectiveEthReserve =
+            k / newTokenReserve;
+
+        if (
+            newEffectiveEthReserve >= effectiveEthReserve
+        ) {
+            return 0;
+        }
+
+        return
+            effectiveEthReserve -
+            newEffectiveEthReserve;
+    }
+
+    /*
+     * Accept ETH only because the contract's reserve is ETH.
+     * There is no public withdrawal function.
+     */
+    receive() external payable {}
+}

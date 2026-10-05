@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 100" fill="none">
+  <g>
+    <rect x="18" y="18" width="64" height="64" rx="2" transform="rotate(45 50 50)" stroke="#7CFFD7" stroke-width="3"/>
+    <rect x="29" y="29" width="42" height="42" rx="1" transform="rotate(45 50 50)" stroke="#00D395" stroke-width="2"/>
+    <rect x="42" y="42" width="16" height="16" transform="rotate(45 50 50)" fill="#00D395"/>
+  </g>
+
+  <text x="105" y="48" fill="#F3FFF9" font-family="Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="4">
+    AELVORA
+  </text>
+
+  <text x="107" y="72" fill="#91A89E" font-family="Arial, sans-serif" font-size="12" letter-spacing="3">
+    MARKET
+  </text>
+</svg>

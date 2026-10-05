@@ -1,0 +1,879 @@
+import { useEffect, useMemo, useState } from "react";
+import { SITE_CONFIG } from "./config/site.js";
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+function shortAddress(address) {
+  if (!address) return "";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function walletKey(provider) {
+  return (
+    provider?.info?.rdns ||
+    provider?.info?.uuid ||
+    provider?.info?.name ||
+    Math.random().toString()
+  );
+}
+
+/* ============================================================
+   WALLET DISCOVERY
+   EIP-6963
+============================================================ */
+
+function useWalletProviders() {
+  const [providers, setProviders] = useState([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const discovered = new Map();
+
+    const handleAnnouncement = (event) => {
+      const detail = event?.detail;
+
+      if (!detail?.info || !detail?.provider) return;
+
+      const info = detail.info;
+
+      const key =
+        info.rdns ||
+        info.uuid ||
+        `${info.name}-${info.icon || ""}`;
+
+      if (!discovered.has(key)) {
+        discovered.set(key, detail);
+
+        setProviders(Array.from(discovered.values()));
+      }
+    };
+
+    window.addEventListener(
+      "eip6963:announceProvider",
+      handleAnnouncement
+    );
+
+    /*
+     * Ask all installed EIP-6963 wallets to announce themselves.
+     *
+     * This does NOT call window.ethereum.
+     * Therefore MetaMask/Rabby/OKX/etc can coexist.
+     */
+    window.dispatchEvent(
+      new Event("eip6963:requestProvider")
+    );
+
+    return () => {
+      window.removeEventListener(
+        "eip6963:announceProvider",
+        handleAnnouncement
+      );
+    };
+  }, []);
+
+  return providers;
+}
+
+/* ============================================================
+   WALLET MODAL
+============================================================ */
+
+function WalletModal({
+  providers,
+  onClose,
+  onConnect,
+  connecting,
+  error,
+}) {
+  return (
+    <div
+      className="wallet-modal-layer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wallet-modal-title"
+    >
+      <div
+        className="wallet-modal-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
+      />
+
+      <section
+        className="wallet-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="wallet-modal-header">
+          <div>
+            <div className="wallet-modal-kicker">
+              AELVORA MARKET
+            </div>
+
+            <h2 id="wallet-modal-title">
+              Connect Wallet
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            className="wallet-modal-close"
+            onClick={onClose}
+            aria-label="Close wallet modal"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="wallet-modal-description">
+          Select a wallet extension to connect to AELVORA Market.
+        </div>
+
+        <div className="wallet-list">
+          {providers.length === 0 ? (
+            <div className="wallet-empty">
+              <div className="wallet-empty-icon">
+                ◇
+              </div>
+
+              <strong>
+                No compatible wallet detected
+              </strong>
+
+              <p>
+                Install a supported browser wallet extension
+                such as MetaMask, Rabby, Phantom, or OKX Wallet,
+                then reload this page.
+              </p>
+            </div>
+          ) : (
+            providers.map((item) => {
+              const info = item.info;
+              const provider = item.provider;
+
+              return (
+                <button
+                  key={walletKey(item)}
+                  type="button"
+                  className="wallet-option"
+                  onClick={() => onConnect(item)}
+                  disabled={connecting}
+                >
+                  <div className="wallet-option-icon">
+                    {info.icon ? (
+                      <img
+                        src={info.icon}
+                        alt=""
+                        draggable="false"
+                      />
+                    ) : (
+                      <span>◇</span>
+                    )}
+                  </div>
+
+                  <div className="wallet-option-info">
+                    <strong>
+                      {info.name || "Browser Wallet"}
+                    </strong>
+
+                    <small>
+                      {connecting
+                        ? "CONNECTING..."
+                        : "BROWSER WALLET"}
+                    </small>
+                  </div>
+
+                  <div className="wallet-option-arrow">
+                    →
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {error && (
+          <div className="wallet-error">
+            {error}
+          </div>
+        )}
+
+        <div className="wallet-modal-footer">
+          By connecting your wallet, you agree to interact
+          with the AELVORA Market protocol.
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ============================================================
+   NAVBAR
+============================================================ */
+
+function Navbar({
+  connectedAddress,
+  onConnect,
+}) {
+  return (
+    <header className="site-header">
+      <a
+        href="#top"
+        className="brand"
+        aria-label="AELVORA Market"
+      >
+        <img
+          src={SITE_CONFIG.brand.logo.icon}
+          alt="AELVORA"
+          className="brand-icon"
+        />
+
+        <span className="brand-wordmark">
+          {SITE_CONFIG.brand.name}
+        </span>
+
+        <span className="brand-product">
+          {SITE_CONFIG.brand.product}
+        </span>
+      </a>
+
+      <nav className="main-nav">
+        {SITE_CONFIG.navigation.map((item) => (
+          <a
+            key={item.label}
+            href={item.href}
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
+
+      <div className="header-actions">
+        <a
+          href={SITE_CONFIG.social.x}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="social-button"
+          aria-label="AELVORA X"
+        >
+          X
+        </a>
+
+        <a
+          href={SITE_CONFIG.social.telegram}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="social-button telegram-button"
+          aria-label="AELVORA Telegram"
+        >
+          ✈
+        </a>
+
+        <button
+          type="button"
+          className="connect-button"
+          onClick={onConnect}
+        >
+          {connectedAddress
+            ? shortAddress(connectedAddress)
+            : SITE_CONFIG.cta.connectWallet.label}
+
+          <span>↗</span>
+        </button>
+      </div>
+    </header>
+  );
+}
+
+/* ============================================================
+   HERO
+============================================================ */
+
+function Hero({ onConnect }) {
+  return (
+    <section
+      className="hero"
+      id="top"
+    >
+      <div className="hero-copy">
+        <div className="eyebrow">
+          <span className="eyebrow-dot" />
+          {SITE_CONFIG.hero.eyebrow}
+        </div>
+
+        <h1>
+          {SITE_CONFIG.hero.title}
+          <span>
+            {SITE_CONFIG.hero.highlight}
+          </span>
+        </h1>
+
+        <p>
+          {SITE_CONFIG.hero.description}
+        </p>
+
+        <div className="hero-actions">
+          <a
+            href={SITE_CONFIG.hero.primaryCta.href}
+            className="primary-button"
+          >
+            {SITE_CONFIG.hero.primaryCta.label}
+            <span>↗</span>
+          </a>
+
+          <a
+            href={SITE_CONFIG.hero.secondaryCta.href}
+            className="secondary-button"
+          >
+            {SITE_CONFIG.hero.secondaryCta.label}
+          </a>
+        </div>
+
+        <div className="hero-meta">
+          <span>01</span>
+          <span>
+            BUILT AROUND TRANSPARENT ON-CHAIN MECHANICS.
+          </span>
+        </div>
+      </div>
+
+      <div className="hero-visual">
+        <div className="orbit orbit-one" />
+        <div className="orbit orbit-two" />
+        <div className="orbit orbit-three" />
+
+        <div className="hero-core">
+          <img
+            src={SITE_CONFIG.brand.logo.icon}
+            alt=""
+          />
+        </div>
+
+        <div className="hero-particle particle-one" />
+        <div className="hero-particle particle-two" />
+        <div className="hero-particle particle-three" />
+
+        <div className="hero-status">
+          <small>
+            {SITE_CONFIG.hero.status.label}
+          </small>
+
+          <strong>
+            {SITE_CONFIG.hero.status.value}
+          </strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+   LAUNCHPAD
+============================================================ */
+
+function Launchpad() {
+  const features = SITE_CONFIG.platform.features;
+
+  return (
+    <section
+      className="content-section launch-section"
+      id="launchpad"
+    >
+      <div className="section-heading">
+        <div className="section-number">
+          01 / LAUNCHPAD
+        </div>
+
+        <h2>
+          {SITE_CONFIG.launchpad.title}
+        </h2>
+
+        <p>
+          {SITE_CONFIG.launchpad.description}
+        </p>
+      </div>
+
+      <div className="feature-grid">
+        {features.map((feature) => (
+          <article
+            className="feature-card"
+            key={feature.number}
+          >
+            <div className="feature-number">
+              {feature.number}
+            </div>
+
+            <div className="feature-symbol">
+              {feature.number === "01" && "◇"}
+              {feature.number === "02" && "○"}
+              {feature.number === "03" && "△"}
+            </div>
+
+            <h3>
+              {feature.title}
+            </h3>
+
+            <p>
+              {feature.description}
+            </p>
+
+            {feature.number === "01" && (
+              <a href="#explore">
+                {SITE_CONFIG.launchpad.cta}
+                <span>↗</span>
+              </a>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+   EXPLORE
+============================================================ */
+
+function Explore() {
+  return (
+    <section
+      className="content-section"
+      id="explore"
+    >
+      <div className="section-heading compact">
+        <div className="section-number">
+          02 / EXPLORE
+        </div>
+
+        <h2>
+          Discover the next market.
+        </h2>
+
+        <p>
+          Explore tokens launched through the AELVORA
+          on-chain market infrastructure.
+        </p>
+      </div>
+
+      <div className="market-placeholder">
+        <div>
+          <span className="placeholder-dot" />
+          MARKET ENGINE
+        </div>
+
+        <strong>
+          ON-CHAIN
+        </strong>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+   HOW IT WORKS
+============================================================ */
+
+function HowItWorks() {
+  return (
+    <section
+      className="content-section"
+      id="how-it-works"
+    >
+      <div className="section-heading compact">
+        <div className="section-number">
+          03 / HOW IT WORKS
+        </div>
+
+        <h2>
+          Built around transparent mechanics.
+        </h2>
+
+        <p>
+          AELVORA separates creation, trading, and
+          graduation into clear on-chain stages.
+        </p>
+      </div>
+
+      <div className="mechanic-grid">
+        <div className="mechanic-card">
+          <span>01</span>
+          <h3>Launch</h3>
+          <p>
+            Create a token and open its on-chain market.
+          </p>
+        </div>
+
+        <div className="mechanic-card">
+          <span>02</span>
+          <h3>Trade</h3>
+          <p>
+            Buy and sell through transparent market pricing.
+          </p>
+        </div>
+
+        <div className="mechanic-card">
+          <span>03</span>
+          <h3>Graduate</h3>
+          <p>
+            Move liquidity according to the protocol rules.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+   FEES
+============================================================ */
+
+function Fees() {
+  return (
+    <section
+      className="content-section"
+      id="fees"
+    >
+      <div className="section-heading compact">
+        <div className="section-number">
+          04 / FEES
+        </div>
+
+        <h2>
+          Simple, transparent fees.
+        </h2>
+
+        <p>
+          Protocol and creator fees are defined by the
+          AELVORA Market configuration.
+        </p>
+      </div>
+
+      <div className="fees-grid">
+        <div className="fee-card">
+          <small>
+            PROTOCOL FEE
+          </small>
+
+          <strong>
+            {SITE_CONFIG.fees.protocol.default}%
+          </strong>
+
+          <span>
+            {SITE_CONFIG.fees.currency}
+          </span>
+        </div>
+
+        <div className="fee-card">
+          <small>
+            CREATOR FEE
+          </small>
+
+          <strong>
+            {SITE_CONFIG.fees.creator.default}%
+          </strong>
+
+          <span>
+            Up to {SITE_CONFIG.fees.creator.maximum}%
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+   FOOTER
+============================================================ */
+
+function Footer() {
+  return (
+    <footer className="site-footer">
+      <div>
+        <strong>
+          {SITE_CONFIG.brand.fullName}
+        </strong>
+
+        <p>
+          {SITE_CONFIG.footer.disclaimer}
+        </p>
+      </div>
+
+      <div className="footer-links">
+        {SITE_CONFIG.social.x && (
+          <a
+            href={SITE_CONFIG.social.x}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            X
+          </a>
+        )}
+
+        {SITE_CONFIG.social.telegram && (
+          <a
+            href={SITE_CONFIG.social.telegram}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Telegram
+          </a>
+        )}
+
+        {SITE_CONFIG.links.docs && (
+          <a
+            href={SITE_CONFIG.links.docs}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Docs
+          </a>
+        )}
+      </div>
+
+      <div className="footer-copy">
+        {SITE_CONFIG.footer.copyright}
+      </div>
+    </footer>
+  );
+}
+
+/* ============================================================
+   APP
+============================================================ */
+
+export default function App() {
+  const providers = useWalletProviders();
+
+  const [walletModalOpen, setWalletModalOpen] =
+    useState(false);
+
+  const [connectedAddress, setConnectedAddress] =
+    useState("");
+
+  const [connectedProvider, setConnectedProvider] =
+    useState(null);
+
+  const [connecting, setConnecting] =
+    useState(false);
+
+  const [walletError, setWalletError] =
+    useState("");
+
+  /*
+   * Check already-authorized wallets without prompting.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkExistingConnection() {
+      for (const item of providers) {
+        try {
+          const accounts = await item.provider.request({
+            method: "eth_accounts",
+          });
+
+          if (
+            Array.isArray(accounts) &&
+            accounts.length > 0 &&
+            !cancelled
+          ) {
+            setConnectedAddress(accounts[0]);
+            setConnectedProvider(item);
+            return;
+          }
+        } catch {
+          // Ignore providers that reject eth_accounts.
+        }
+      }
+    }
+
+    if (providers.length > 0) {
+      checkExistingConnection();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [providers]);
+
+  /*
+   * Lock page scrolling while wallet modal is open.
+   */
+  useEffect(() => {
+    if (!walletModalOpen) {
+      document.body.classList.remove(
+        "wallet-modal-open"
+      );
+
+      return;
+    }
+
+    document.body.classList.add(
+      "wallet-modal-open"
+    );
+
+    return () => {
+      document.body.classList.remove(
+        "wallet-modal-open"
+      );
+    };
+  }, [walletModalOpen]);
+
+  /*
+   * ESC closes modal.
+   */
+  useEffect(() => {
+    if (!walletModalOpen) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setWalletModalOpen(false);
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [walletModalOpen]);
+
+  const handleOpenWallet = () => {
+    setWalletError("");
+    setWalletModalOpen(true);
+  };
+
+  const handleConnect = async (item) => {
+    if (!item?.provider) return;
+
+    setConnecting(true);
+    setWalletError("");
+
+    try {
+      const accounts = await item.provider.request({
+        method: "eth_requestAccounts",
+      });
+
+      if (
+        !Array.isArray(accounts) ||
+        !accounts[0]
+      ) {
+        throw new Error(
+          "No wallet account was returned."
+        );
+      }
+
+      setConnectedAddress(accounts[0]);
+      setConnectedProvider(item);
+
+      setWalletModalOpen(false);
+    } catch (error) {
+      console.error(
+        "AELVORA wallet connection failed:",
+        error
+      );
+
+      if (
+        error?.code === 4001
+      ) {
+        setWalletError(
+          "Connection request was rejected in the wallet."
+        );
+      } else {
+        setWalletError(
+          error?.message ||
+            "Unable to connect to this wallet."
+        );
+      }
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  /*
+   * Keep wallet state synchronized when user changes account.
+   */
+  useEffect(() => {
+    if (!connectedProvider?.provider?.on) {
+      return;
+    }
+
+    const provider =
+      connectedProvider.provider;
+
+    const handleAccountsChanged = (
+      accounts
+    ) => {
+      if (
+        Array.isArray(accounts) &&
+        accounts.length > 0
+      ) {
+        setConnectedAddress(accounts[0]);
+      } else {
+        setConnectedAddress("");
+        setConnectedProvider(null);
+      }
+    };
+
+    provider.on(
+      "accountsChanged",
+      handleAccountsChanged
+    );
+
+    return () => {
+      if (provider.removeListener) {
+        provider.removeListener(
+          "accountsChanged",
+          handleAccountsChanged
+        );
+      }
+    };
+  }, [connectedProvider]);
+
+  return (
+    <div className="app-shell">
+      <Navbar
+        connectedAddress={connectedAddress}
+        onConnect={handleOpenWallet}
+      />
+
+      <main>
+        <Hero
+          onConnect={handleOpenWallet}
+        />
+
+        <Launchpad />
+
+        <Explore />
+
+        <HowItWorks />
+
+        <Fees />
+      </main>
+
+      <Footer />
+
+      {walletModalOpen && (
+        <WalletModal
+          providers={providers}
+          onClose={() =>
+            setWalletModalOpen(false)
+          }
+          onConnect={handleConnect}
+          connecting={connecting}
+          error={walletError}
+        />
+      )}
+    </div>
+  );
+}

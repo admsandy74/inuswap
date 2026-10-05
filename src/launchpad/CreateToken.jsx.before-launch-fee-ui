@@ -1,0 +1,275 @@
+import { useState } from "react";
+import "./create-token.css";
+
+const CREATOR_TAX_MIN = 0;
+const CREATOR_TAX_MAX = 5;
+const AELVORA_FEE = 1;
+const LAUNCH_FEE_ETH = "0.0003";
+const MAX_TOTAL_SUPPLY = 1_000_000_000_000;
+
+export default function CreateToken({
+  walletAddress,
+  walletBalance,
+  onConnect,
+}) {
+  const [tokenName, setTokenName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [totalSupply, setTotalSupply] = useState("");
+  const [decimals, setDecimals] = useState("18");
+  const [creatorTax, setCreatorTax] = useState("0");
+  const [initialBuy, setInitialBuy] = useState("");
+
+  return (
+    <div className="create-token-page">
+      <header className="create-token-navbar">
+        <a href="/" className="create-token-brand">
+          <span className="create-token-brand-mark">A</span>
+
+          <span>
+            <strong>AELVORA</strong>
+            <small>MARKET</small>
+          </span>
+        </a>
+
+        <div className="create-token-wallet">
+          {walletAddress ? (
+            <>
+              {walletBalance !== null && (
+                <span className="create-token-balance">
+                  {walletBalance} ETH
+                </span>
+              )}
+
+              <span className="create-token-address">
+                {walletAddress.slice(0, 6)}
+                ...
+                {walletAddress.slice(-4)}
+              </span>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="create-token-connect"
+              onClick={onConnect}
+            >
+              Connect Wallet
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main className="create-token-main">
+        <div className="create-token-heading">
+          <span>LAUNCHPAD</span>
+
+          <h1>
+            Create your
+            <em> token</em>
+          </h1>
+
+          <p>
+            Launch a new market on AELVORA with
+            transparent creator settings and ETH liquidity.
+          </p>
+        </div>
+
+        <section className="create-token-card">
+          <div className="create-token-card-header">
+            <div>
+              <span className="create-token-kicker">
+                TOKEN SETUP
+              </span>
+
+              <h2>Token Information</h2>
+            </div>
+
+            <span className="create-token-network">
+              ◈ ROBINHOOD CHAIN
+            </span>
+          </div>
+
+          <div className="create-token-form">
+            <label>
+              <span>Token Name</span>
+
+              <input
+                type="text"
+                placeholder="e.g. Aelvora"
+                value={tokenName}
+                onChange={(e) =>
+                  setTokenName(e.target.value)
+                }
+              />
+            </label>
+
+            <label>
+              <span>Token Symbol</span>
+
+              <input
+                type="text"
+                placeholder="e.g. AELV"
+                value={symbol}
+                onChange={(e) =>
+                  setSymbol(e.target.value.toUpperCase())
+                }
+              />
+            </label>
+
+            <label className="form-wide">
+              <span>Total Supply</span>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="1000000000"
+                value={totalSupply}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/,/g, "");
+
+                  if (/^\\d*$/.test(value)) {
+                    if (
+                      value === "" ||
+                      Number(value) <= MAX_TOTAL_SUPPLY
+                    ) {
+                      setTotalSupply(value);
+                    }
+                  }
+                }}
+              />
+
+              <small>
+                Maximum total supply: 1,000,000,000,000 tokens.
+              </small>
+            </label>
+
+            <label>
+              <span>Decimals</span>
+
+              <input
+                type="number"
+                min="0"
+                max="18"
+                value={decimals}
+                onChange={(e) =>
+                  setDecimals(e.target.value)
+                }
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="create-token-card">
+          <div className="create-token-card-header">
+            <div>
+              <span className="create-token-kicker">
+                CREATOR SETTINGS
+              </span>
+
+              <h2>Fees & Initial Buy</h2>
+            </div>
+          </div>
+
+          <div className="create-token-form">
+            <label>
+              <span>Creator Tax</span>
+
+              <div className="input-with-suffix">
+                <input
+                  type="number"
+                  min={CREATOR_TAX_MIN}
+                  max={CREATOR_TAX_MAX}
+                  step="0.1"
+                  value={creatorTax}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    if (
+                      value === "" ||
+                      Number(value) <= CREATOR_TAX_MAX
+                    ) {
+                      setCreatorTax(value);
+                    }
+                  }}
+                />
+
+                <b>%</b>
+              </div>
+
+              <small>
+                Creator tax can be set from 0% to 5%.
+              </small>
+            </label>
+
+            <label>
+              <span>Initial Creator Buy</span>
+
+              <div className="input-with-suffix">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.000000"
+                  value={initialBuy}
+                  onChange={(e) =>
+                    setInitialBuy(e.target.value)
+                  }
+                />
+
+                <b>ETH</b>
+              </div>
+
+              <small>
+                Initial purchase using Robinhood Chain ETH.
+              </small>
+            </label>
+
+            <div className="create-token-fixed-fee">
+              <div>
+                <span>AELVORA Fee</span>
+                <strong>{AELVORA_FEE}%</strong>
+              </div>
+
+              <small>
+                Fixed protocol fee. This value cannot be
+                edited.
+              </small>
+            </div>
+          </div>
+        </section>
+
+        <section className="create-token-summary">
+          <div>
+            <span>PAIR</span>
+            <strong>ETH / Robinhood</strong>
+          </div>
+
+          <div>
+            <span>CREATOR TAX</span>
+            <strong>{creatorTax || "0"}%</strong>
+          </div>
+
+          <div>
+            <span>AELVORA FEE</span>
+            <strong>1% FIXED</strong>
+          </div>
+        </section>
+
+        <button
+          type="button"
+          className="create-token-submit"
+          disabled={!walletAddress}
+        >
+          {walletAddress
+            ? "Create Token"
+            : "Connect Wallet to Continue"}
+          <span>↗</span>
+        </button>
+
+        <p className="create-token-disclaimer">
+          Token creation will deploy according to the
+          AELVORA launchpad protocol. Review all settings
+          before confirming the transaction.
+        </p>
+      </main>
+    </div>
+  );
+}

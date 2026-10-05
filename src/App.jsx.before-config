@@ -1,0 +1,302 @@
+import { SITE_CONFIG } from "./config/site";
+import "./index.css";
+
+const { brand, hero, fees } = SITE_CONFIG;
+
+function Logo() {
+  return (
+    <div className="brand">
+      <div className="brand-mark" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+
+      <div className="brand-text">
+        <strong>{brand.name}</strong>
+        <small>{brand.product}</small>
+      </div>
+    </div>
+  );
+}
+
+function Arrow() {
+  return <span className="arrow">↗</span>;
+}
+
+function App() {
+  return (
+    <div className="site-shell">
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
+
+      <header className="navbar">
+        <Logo />
+
+        <nav className="nav-links">
+          <a href="#launchpad">Launchpad</a>
+          <a href="#market">Explore</a>
+          <a href="#how-it-works">How It Works</a>
+          <a href="#fees">Fees</a>
+        </nav>
+
+        <button className="wallet-button">
+          Connect Wallet
+        </button>
+      </header>
+
+      <main>
+        <section className="hero">
+          <div className="hero-copy">
+            <div className="eyebrow">
+              <span className="status-dot" />
+              {hero.eyebrow}
+            </div>
+
+            <h1>
+              {hero.title}
+              <br />
+              <span>{hero.highlight}</span>
+            </h1>
+
+            <p>{hero.description}</p>
+
+            <div className="hero-actions">
+              <a className="button button-primary" href="#launchpad">
+                {hero.primaryCta}
+                <Arrow />
+              </a>
+
+              <a className="button button-secondary" href="#market">
+                {hero.secondaryCta}
+              </a>
+            </div>
+
+            <div className="hero-note">
+              <span>01</span>
+              Built around transparent on-chain mechanics.
+            </div>
+          </div>
+
+          <div className="hero-visual">
+            <div className="orbital">
+              <div className="orbit orbit-one" />
+              <div className="orbit orbit-two" />
+              <div className="orbit orbit-three" />
+
+              <div className="core">
+                <div className="core-symbol">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+
+              <div className="orbit-node node-one" />
+              <div className="orbit-node node-two" />
+              <div className="orbit-node node-three" />
+            </div>
+
+            <div className="visual-label">
+              <span>MARKET ENGINE</span>
+              <strong>ON-CHAIN</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="stats">
+          <div>
+            <span>Protocol Fee</span>
+            <strong>{fees.protocol}%</strong>
+          </div>
+
+          <div>
+            <span>Creator Fee</span>
+            <strong>0–{fees.creatorMax}%</strong>
+          </div>
+
+          <div>
+            <span>Settlement</span>
+            <strong>{fees.currency}</strong>
+          </div>
+
+          <div>
+            <span>Liquidity</span>
+            <strong>Burned</strong>
+          </div>
+        </section>
+
+        <section className="section" id="launchpad">
+          <div className="section-heading">
+            <div>
+              <span className="section-kicker">01 / LAUNCHPAD</span>
+              <h2>From an idea<br />to a live market.</h2>
+            </div>
+
+            <p>
+              AELVORA Launchpad gives creators a structured path to deploy
+              tokens and establish an open market without unnecessary
+              complexity.
+            </p>
+          </div>
+
+          <div className="feature-grid">
+            <article className="feature-card feature-large">
+              <span className="card-number">01</span>
+              <div className="card-icon">◇</div>
+              <h3>Create</h3>
+              <p>
+                Configure your token, creator fee and launch parameters,
+                then deploy directly through the AELVORA Launchpad.
+              </p>
+              <a href="#launchpad">Create a token <Arrow /></a>
+            </article>
+
+            <article className="feature-card">
+              <span className="card-number">02</span>
+              <div className="card-icon">◌</div>
+              <h3>Trade</h3>
+              <p>
+                Tokens begin on a transparent bonding curve designed for
+                continuous buying and selling.
+              </p>
+            </article>
+
+            <article className="feature-card">
+              <span className="card-number">03</span>
+              <div className="card-icon">△</div>
+              <h3>Graduate</h3>
+              <p>
+                Once the graduation target is reached, liquidity moves to
+                the open DEX market.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="market-section" id="market">
+          <div className="market-panel">
+            <div>
+              <span className="section-kicker">AELVORA MARKET</span>
+              <h2>Discover what is<br />moving next.</h2>
+            </div>
+
+            <a className="button button-secondary" href="#market">
+              Explore Market <Arrow />
+            </a>
+          </div>
+        </section>
+
+        <section className="section process-section" id="how-it-works">
+          <div className="section-heading">
+            <div>
+              <span className="section-kicker">02 / MECHANICS</span>
+              <h2>A simple path.<br />Clear rules.</h2>
+            </div>
+
+            <p>
+              Every launch follows the same core lifecycle, making the market
+              easier to understand and verify on-chain.
+            </p>
+          </div>
+
+          <div className="process">
+            <div className="process-line" />
+
+            <div className="process-step">
+              <span>01</span>
+              <strong>Create</strong>
+              <p>Token is deployed through the Launchpad.</p>
+            </div>
+
+            <div className="process-step">
+              <span>02</span>
+              <strong>Bonding Curve</strong>
+              <p>Users buy and sell while the market develops.</p>
+            </div>
+
+            <div className="process-step">
+              <span>03</span>
+              <strong>Graduation</strong>
+              <p>The predefined target is reached.</p>
+            </div>
+
+            <div className="process-step">
+              <span>04</span>
+              <strong>Liquidity</strong>
+              <p>Liquidity moves to Uniswap and LP is permanently burned.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="fee-section" id="fees">
+          <div className="fee-copy">
+            <span className="section-kicker">03 / FEE MODEL</span>
+            <h2>Simple fees.<br />Transparent ownership.</h2>
+            <p>
+              AELVORA separates protocol revenue from creator rewards.
+              Trading fees are settled in ETH and accounted for on-chain.
+            </p>
+          </div>
+
+          <div className="fee-card">
+            <div className="fee-row">
+              <span>AELVORA Protocol</span>
+              <strong>{fees.protocol}%</strong>
+            </div>
+
+            <div className="fee-row">
+              <span>Creator</span>
+              <strong>0–{fees.creatorMax}%</strong>
+            </div>
+
+            <div className="fee-divider" />
+
+            <div className="fee-row total">
+              <span>Settlement Asset</span>
+              <strong>{fees.currency}</strong>
+            </div>
+
+            <p className="fee-footnote">
+              Creator rewards are tracked by wallet and remain claimable
+              according to the creator's on-chain balance.
+            </p>
+          </div>
+        </section>
+
+        <section className="cta-section">
+          <div className="cta-glow" />
+          <span className="section-kicker">AELVORA MARKET</span>
+          <h2>Build something<br /><span>worth trading.</span></h2>
+
+          <div className="hero-actions">
+            <a className="button button-primary" href="#launchpad">
+              Launch a Token <Arrow />
+            </a>
+
+            <a className="button button-secondary" href="#how-it-works">
+              Read the Mechanics
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <Logo />
+
+        <div className="footer-links">
+          <a href="#launchpad">Launchpad</a>
+          <a href="#market">Market</a>
+          <a href="#fees">Fees</a>
+          <a href="#how-it-works">Docs</a>
+        </div>
+
+        <span className="copyright">
+          © {new Date().getFullYear()} AELVORA Market
+        </span>
+      </footer>
+    </div>
+  );
+}
+
+export default App;

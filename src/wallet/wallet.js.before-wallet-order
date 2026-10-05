@@ -1,0 +1,188 @@
+export function getInjectedWallets() {
+  if (typeof window === "undefined") return [];
+
+  const wallets = new Map();
+
+  function addProvider(detail) {
+    if (!detail?.provider) return;
+
+    const info = detail.info || {};
+    const rdns = String(info.rdns || "").toLowerCase();
+    const name = String(info.name || "").toLowerCase();
+
+    // Phantom tidak digunakan di AELVORA.
+    if (
+      rdns.includes("phantom") ||
+      name.includes("phantom")
+    ) {
+      return;
+    }
+
+    const id =
+      info.rdns ||
+      info.uuid ||
+      info.name ||
+      "injected";
+
+    if (wallets.has(id)) return;
+
+    wallets.set(id, {
+      id,
+      name: info.name || "Browser Wallet",
+      icon: info.icon || "",
+      provider: detail.provider,
+    });
+  }
+
+  // EIP-6963 providers.
+  if (Array.isArray(window.__aelvoraWalletProviders)) {
+    for (const detail of window.__aelvoraWalletProviders) {
+      addProvider(detail);
+    }
+  }
+
+  // Legacy injected provider.
+  // Hanya fallback jika provider belum terdeteksi melalui EIP-6963.
+  if (window.ethereum) {
+    const alreadyDetected = Array.from(wallets.values()).some(
+      (wallet) => wallet.provider === window.ethereum
+    );
+
+    if (!alreadyDetected) {
+      addProvider({
+        info: {
+          rdns: "legacy.injected",
+          name: "Browser Wallet",
+          icon: "",
+        },
+        provider: window.ethereum,
+      });
+    }
+  }
+
+  return Array.from(wallets.values());
+}
+
+export function discoverInjectedWallets() {
+  if (typeof window === "undefined") return [];
+
+  if (!window.__aelvoraWalletProviders) {
+    window.__aelvoraWalletProviders = [];
+  }
+
+  const providers = window.__aelvoraWalletProviders;
+
+  function announce(detail) {
+    if (!detail?.provider) return;
+
+    const info = detail.info || {};
+    const rdns = String(info.rdns || "").toLowerCase();
+    const name = String(info.name || "").toLowerCase();
+
+    // AELVORA hanya menggunakan EVM wallets yang diperlukan.
+    // Jangan masukkan Phantom, Nightly, atau SubWallet.
+    if (
+      rdns.includes("phantom") ||
+      name.includes("phantom") ||
+      rdns.includes("nightly") ||
+      name.includes("nightly") ||
+      rdns.includes("subwallet") ||
+      name.includes("subwallet")
+    ) {
+      return;
+    }
+
+    const exists = providers.some(
+      (item) =>
+        item?.provider === detail.provider ||
+        (
+          item?.info?.rdns &&
+          info.rdns &&
+          item.info.rdns === info.rdns
+        )
+    );
+
+    if (!exists) {
+      providers.push(detail);
+    }
+  }
+
+  // Pasang listener hanya sekali.
+  if (!window.__aelvoraWalletListenerInstalled) {
+    window.addEventListener(
+      "eip6963:announceProvider",
+      (event) => {
+        announce(event.detail);
+      }
+    );
+
+    window.__aelvoraWalletListenerInstalled = true;
+  }
+
+  // Minta semua EIP-6963 wallet mengumumkan provider.
+  window.dispatchEvent(
+    new Event("eip6963:requestProvider")
+  );
+
+  return providers;
+}
+
+export async function connectWallet(provider) {
+  if (!provider) {
+    throw new Error("Wallet provider not found.");
+  }
+
+  // SELALU minta accounts dari provider yang dipilih.
+  const accounts = await provider.request({
+    method: "eth_requestAccounts",
+  });
+
+  return accounts?.[0] ?? null;
+}
+
+export async function disconnectWallet(provider) {
+  if (!provider) {
+    return false;
+  }
+
+  // OKX injected EVM provider memiliki disconnect()
+  // sendiri. Jangan gunakan wallet_revokePermissions
+  // untuk OKX karena method tersebut tidak tersedia.
+  if (
+    provider.isOKExWallet ||
+    provider.isOkxWallet
+  ) {
+    try {
+      await provider.disconnect();
+      return true;
+    } catch (err) {
+      console.warn(
+        "OKX disconnect failed:",
+        err?.message || err
+      );
+      return false;
+    }
+  }
+
+  // Wallet lain tetap menggunakan EIP-2255
+  // jika memang didukung oleh provider.
+  try {
+    await provider.request({
+      method: "wallet_revokePermissions",
+      params: [
+        {
+          eth_accounts: {},
+        },
+      ],
+    });
+
+    return true;
+  } catch (err) {
+    console.warn(
+      "wallet_revokePermissions unavailable:",
+      err?.message || err
+    );
+
+    return false;
+  }
+}

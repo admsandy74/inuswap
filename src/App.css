@@ -1,0 +1,311 @@
+.inu-app {
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at 50% -10%,
+      rgba(240,185,11,.08),
+      transparent 35%
+    ),
+    #080808;
+  color: #fff;
+}
+
+.inu-nav {
+  height: 70px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  background: rgba(8,8,8,.88);
+  backdrop-filter: blur(16px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.inu-logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff;
+  text-decoration: none;
+}
+
+.inu-logo-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #f0b90b;
+  color: #090909;
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: -.04em;
+}
+
+.inu-logo-text {
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: -.04em;
+}
+
+.inu-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.inu-nav-links button,
+.inu-nav-links a {
+  border: 0;
+  background: none;
+  color: #777;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.inu-nav-links button:hover,
+.inu-nav-links button.active,
+.inu-nav-links a:hover {
+  color: #f0b90b;
+}
+
+.inu-connect {
+  height: 36px;
+  padding: 0 15px;
+  border: 1px solid rgba(240,185,11,.3);
+  border-radius: 8px;
+  background: rgba(240,185,11,.08);
+  color: #f0b90b;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.inu-network-warning {
+  padding: 10px;
+  text-align: center;
+  background: rgba(255,80,50,.08);
+  border-bottom: 1px solid rgba(255,80,50,.15);
+  color: #aaa;
+  font-size: 10px;
+}
+
+.inu-home {
+  width: min(900px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.inu-hero {
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.inu-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 22px;
+  color: #777;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.inu-badge span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f0b90b;
+  box-shadow: 0 0 10px #f0b90b;
+}
+
+.inu-hero h1 {
+  margin: 0;
+  font-size: clamp(48px, 9vw, 90px);
+  line-height: .88;
+  letter-spacing: -.07em;
+}
+
+.inu-hero h1 strong {
+  color: #f0b90b;
+}
+
+.inu-hero p {
+  max-width: 440px;
+  margin: 25px 0;
+  color: #666;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.inu-hero-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.inu-primary,
+.inu-secondary {
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.inu-primary {
+  border: 0;
+  background: #f0b90b;
+  color: #080808;
+}
+
+.inu-secondary {
+  border: 1px solid rgba(255,255,255,.1);
+  background: #111;
+  color: #aaa;
+}
+
+.inu-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0e0e0e;
+}
+
+.inu-stats div {
+  padding: 22px;
+  border-right: 1px solid rgba(255,255,255,.06);
+}
+
+.inu-stats div:last-child {
+  border-right: 0;
+}
+
+.inu-stats span,
+.inu-ca-section span {
+  display: block;
+  margin-bottom: 8px;
+  color: #4f4f4f;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.inu-stats strong {
+  font-size: 14px;
+}
+
+.inu-ca-section {
+  margin-top: 12px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 14px;
+  background: #0e0e0e;
+}
+
+.inu-ca-section code {
+  color: #777;
+  font-size: 9px;
+  word-break: break-all;
+}
+
+.inu-ca-section button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(240,185,11,.2);
+  border-radius: 7px;
+  padding: 7px 10px;
+  background: rgba(240,185,11,.06);
+  color: #f0b90b;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.inu-tagline {
+  padding: 100px 0;
+  text-align: center;
+}
+
+.inu-tagline span {
+  color: #f0b90b;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+
+.inu-tagline p {
+  color: #444;
+  font-size: 11px;
+}
+
+.inu-footer {
+  height: 80px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255,255,255,.05);
+  color: #3e3e3e;
+  font-size: 9px;
+}
+
+@media (max-width: 600px) {
+  .inu-nav {
+    padding: 0 14px;
+  }
+
+  .inu-nav-links {
+    display: none;
+  }
+
+  .inu-logo-text {
+    font-size: 12px;
+  }
+
+  .inu-hero {
+    min-height: 500px;
+  }
+
+  .inu-hero h1 {
+    font-size: 51px;
+  }
+
+  .inu-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .inu-stats div {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+
+  .inu-stats div:last-child {
+    border-bottom: 0;
+  }
+
+  .inu-ca-section {
+    align-items: flex-start;
+  }
+
+  .inu-ca-section button {
+    margin-top: 18px;
+  }
+
+  .inu-footer {
+    padding: 0 14px;
+  }
+}

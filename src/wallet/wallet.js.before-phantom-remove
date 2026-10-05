@@ -1,0 +1,126 @@
+export function getInjectedWallets() {
+  if (typeof window === "undefined") return [];
+
+  const wallets = new Map();
+
+  function addProvider(detail) {
+    if (!detail?.provider) return;
+
+    const info = detail.info || {};
+    const id =
+      info.rdns ||
+      info.uuid ||
+      info.name ||
+      "injected";
+
+    if (wallets.has(id)) return;
+
+    wallets.set(id, {
+      id,
+      name: info.name || "Browser Wallet",
+      icon: info.icon || "",
+      provider: detail.provider,
+    });
+  }
+
+  // EIP-6963 providers that announced before this function ran.
+  if (Array.isArray(window.__aelvoraWalletProviders)) {
+    for (const detail of window.__aelvoraWalletProviders) {
+      addProvider(detail);
+    }
+  }
+
+  // Standard injected provider fallback.
+  if (window.ethereum) {
+    addProvider({
+      info: {
+        rdns: "legacy.injected",
+        name: "Browser Wallet",
+        icon: "",
+      },
+      provider: window.ethereum,
+    });
+  }
+
+  return Array.from(wallets.values());
+}
+
+export function discoverInjectedWallets() {
+  if (typeof window === "undefined") return [];
+
+  if (!window.__aelvoraWalletProviders) {
+    window.__aelvoraWalletProviders = [];
+  }
+
+  const providers = window.__aelvoraWalletProviders;
+
+  function announce(detail) {
+    if (!detail?.provider) return;
+
+    const exists = providers.some(
+      (item) =>
+        item?.provider === detail.provider ||
+        item?.info?.rdns === detail?.info?.rdns
+    );
+
+    if (!exists) {
+      providers.push(detail);
+    }
+  }
+
+  window.addEventListener(
+    "eip6963:announceProvider",
+    (event) => {
+      announce(event.detail);
+    }
+  );
+
+  window.dispatchEvent(
+    new Event("eip6963:requestProvider")
+  );
+
+  return providers;
+}
+
+export async function connectWallet(provider) {
+  if (!provider) {
+    throw new Error("Wallet provider not found.");
+  }
+
+  const accounts = await provider.request({
+    method: "eth_requestAccounts",
+  });
+
+  return accounts?.[0] ?? null;
+}
+
+
+export async function disconnectWallet(provider) {
+  if (!provider) {
+    return false;
+  }
+
+  // EIP-2255 / wallet_revokePermissions.
+  // Tidak semua wallet extension mendukung method ini.
+  try {
+    await provider.request({
+      method: "wallet_revokePermissions",
+      params: [
+        {
+          eth_accounts: {},
+        },
+      ],
+    });
+
+    return true;
+  } catch (err) {
+    console.warn(
+      "wallet_revokePermissions unavailable:",
+      err?.message || err
+    );
+
+    // Jangan menganggap gagal sebagai error fatal.
+    // UI tetap boleh melakukan local disconnect.
+    return false;
+  }
+}

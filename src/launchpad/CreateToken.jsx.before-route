@@ -1,0 +1,174 @@
+import "./create-token.css";
+
+export default function CreateToken({
+  walletAddress,
+  walletProvider,
+  walletChainId,
+  walletBalance,
+  onConnect,
+  onBack,
+}) {
+  return (
+    <div className="create-token-page">
+      <header className="create-token-nav">
+        <button
+          type="button"
+          className="create-token-back"
+          onClick={onBack}
+        >
+          ← AELVORA
+        </button>
+
+        <div className="create-token-nav-right">
+          {walletAddress && walletBalance !== null && (
+            <span className="create-token-balance">
+              {walletBalance} ETH
+            </span>
+          )}
+
+          <span className="create-token-network">
+            {walletChainId === "0x1237"
+              ? "ROBINHOOD"
+              : "WRONG NETWORK"}
+          </span>
+
+          <button
+            type="button"
+            className="create-token-wallet"
+            onClick={onConnect}
+          >
+            {walletAddress
+              ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+              : "CONNECT WALLET"}
+          </button>
+        </div>
+      </header>
+
+      <main className="create-token-main">
+        <div className="create-token-heading">
+          <span>01 / LAUNCHPAD</span>
+          <h1>Create Token</h1>
+          <p>
+            Create your token and open a new market
+            through the AELVORA launchpad.
+          </p>
+        </div>
+
+        <section className="create-token-card">
+          <div className="create-token-card-header">
+            <div>
+              <span className="create-token-kicker">
+                TOKEN CONFIGURATION
+              </span>
+              <h2>Build your market</h2>
+            </div>
+
+            <span className="create-token-chain">
+              ETH / ROBINHOOD
+            </span>
+          </div>
+
+          <div className="create-token-grid">
+            <label>
+              <span>Token Name</span>
+              <input
+                type="text"
+                placeholder="Your Token Name"
+              />
+            </label>
+
+            <label>
+              <span>Token Symbol</span>
+              <input
+                type="text"
+                placeholder="TOKEN"
+                maxLength={12}
+              />
+            </label>
+          </div>
+
+          <label className="create-token-field">
+            <span>Description</span>
+            <textarea
+              placeholder="Tell the community about your token..."
+              rows={4}
+            />
+          </label>
+
+          <div className="create-token-grid">
+            <label>
+              <span>Token Logo</span>
+              <input type="file" accept="image/*" />
+            </label>
+
+            <label>
+              <span>Initial Creator Buy</span>
+              <div className="create-token-input-unit">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  placeholder="0.000000"
+                />
+                <strong>ETH</strong>
+              </div>
+            </label>
+          </div>
+
+          <div className="create-token-fees">
+            <div className="create-token-fee">
+              <div>
+                <strong>Creator Tax</strong>
+                <small>
+                  Configurable creator fee
+                </small>
+              </div>
+
+              <div className="create-token-percent">
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  defaultValue="0"
+                />
+                <span>%</span>
+              </div>
+            </div>
+
+            <div className="create-token-fee">
+              <div>
+                <strong>AELVORA Fee</strong>
+                <small>
+                  Fixed protocol fee
+                </small>
+              </div>
+
+              <strong className="create-token-fixed">
+                1%
+              </strong>
+            </div>
+          </div>
+
+          <div className="create-token-summary">
+            <span>Settlement Pair</span>
+            <strong>ETH / Robinhood Chain</strong>
+          </div>
+
+          <button
+            type="button"
+            className="create-token-submit"
+          >
+            CREATE TOKEN
+            <span>↗</span>
+          </button>
+
+          <p className="create-token-note">
+            AELVORA fee is fixed at 1%. Creator tax
+            can be configured from 0% to 5%.
+          </p>
+        </section>
+      </main>
+    </div>
+  );
+}

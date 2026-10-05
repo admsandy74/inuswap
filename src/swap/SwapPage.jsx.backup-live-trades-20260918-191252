@@ -1,0 +1,1586 @@
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  formatUnits,
+  formatEther,
+  parseEther,
+  parseUnits,
+  isAddress,
+} from "viem";
+import {
+  ROBINHOOD_CHAIN_ID,
+  getAelvoraCurveChart,
+  getMarketChart,
+  resolveAelvoraToken,
+  getBuyQuote,
+  getSellQuote,
+  getV4BuyQuote,
+  getV4SellQuote,
+  getV3BuyQuote,
+  getV3SellQuote,
+  calculateMinimumReceived,
+  executeCurveBuy,
+  executeCurveSell,
+  executeV4Buy,
+  executeV4Sell,
+  executeV3Buy,
+  executeV3Sell,
+  getTokenBalance,
+  publicClient,
+  getDexScreenerTokenData,
+} from "./AelvoraSwap.js";
+import "./swap.css";
+import { getActiveWalletProvider } from "../wallet/wallet";
+
+const DEMO_TRADES = [
+  { type: "BUY", wallet: "0x82...91A4", amount: "0.4200 ETH", tokens: "12,420" },
+  { type: "SELL", wallet: "0x31...7AF2", amount: "0.1800 ETH", tokens: "5,210" },
+  { type: "BUY", wallet: "0x72...C291", amount: "0.7300 ETH", tokens: "21,840" },
+  { type: "BUY", wallet: "0x44...18B7", amount: "0.1100 ETH", tokens: "3,120" },
+  { type: "SELL", wallet: "0xA8...43D1", amount: "0.2600 ETH", tokens: "7,640" },
+  { type: "BUY", wallet: "0x19...F8C2", amount: "0.3900 ETH", tokens: "11,580" },
+  { type: "BUY", wallet: "0x56...91D0", amount: "0.0800 ETH", tokens: "2,370" },
+  { type: "SELL", wallet: "0xC1...72A8", amount: "0.1400 ETH", tokens: "4,090" },
+  { type: "BUY", wallet: "0x91...4E20", amount: "0.5100 ETH", tokens: "15,210" },
+  { type: "BUY", wallet: "0x63...B118", amount: "0.2200 ETH", tokens: "6,540" },
+  { type: "SELL", wallet: "0x28...D991", amount: "0.0900 ETH", tokens: "2,610" },
+  { type: "BUY", wallet: "0x77...A402", amount: "0.3100 ETH", tokens: "9,180" },
+];
+
+const DEMO_HOLDERS = [
+  { rank: 1, wallet: "0x82...91A4", amount: "124,200", share: "12.42%" },
+  { rank: 2, wallet: "0x31...7AF2", amount: "87,100", share: "8.71%" },
+  { rank: 3, wallet: "0x72...C291", amount: "61,400", share: "6.14%" },
+  { rank: 4, wallet: "0x44...18B7", amount: "48,900", share: "4.89%" },
+  { rank: 5, wallet: "0xA8...43D1", amount: "42,600", share: "4.26%" },
+  { rank: 6, wallet: "0x19...F8C2", amount: "38,200", share: "3.82%" },
+  { rank: 7, wallet: "0x56...91D0", amount: "31,800", share: "3.18%" },
+  { rank: 8, wallet: "0xC1...72A8", amount: "27,500", share: "2.75%" },
+  { rank: 9, wallet: "0x91...4E20", amount: "21,900", share: "2.19%" },
+  { rank: 10, wallet: "0x63...B118", amount: "18,700", share: "1.87%" },
+  { rank: 11, wallet: "0x28...D991", amount: "15,600", share: "1.56%" },
+  { rank: 12, wallet: "0x77...A402", amount: "12,400", share: "1.24%" },
+];
+
+function MiniChart({
+  tokenAddress,
+  pairAddress,
+}) {
+  const token = String(
+    tokenAddress || ""
+  ).trim();
+
+  const pair = String(
+    pairAddress || ""
+  ).trim();
+
+  if (!token) {
+    return (
+      <div className="swap-chart-empty">
+        Select a token to view the chart.
+      </div>
+    );
+  }
+
+  const validAddress = (value) =>
+    /^0x[a-fA-F0-9]{40}$/.test(value);
+
+  const target =
+    validAddress(pair)
+      ? pair
+      : token;
+
+  const chartUrl =
+    `https://dexscreener.com/robinhood/${target}` +
+    `?chartType=price&embed=1&info=0&theme=dark&trades=0`;
+
+  return (
+    <iframe
+      key={chartUrl}
+      className="swap-chart-dex"
+      src={chartUrl}
+      title="DexScreener Chart"
+      loading="eager"
+      frameBorder="0"
+      allow="clipboard-write"
+    />
+  );
+}
+
+
+function Pagination({ page, totalPages, onChange }) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="swap-pagination">
+      <button
+        type="button"
+        disabled={page === 1}
+        onClick={() => onChange(page - 1)}
+      >
+        ←
+      </button>
+
+      {Array.from({ length: totalPages }, (_, i) => i + 1).map((item) => (
+        <button
+          type="button"
+          key={item}
+          className={page === item ? "active" : ""}
+          onClick={() => onChange(item)}
+        >
+          {item}
+        </button>
+      ))}
+
+      <button
+        type="button"
+        disabled={page === totalPages}
+        onClick={() => onChange(page + 1)}
+      >
+        →
+      </button>
+    </div>
+  );
+}
+
+export default function SwapPage({
+  onBack,
+  walletAddress,
+  walletChainId,
+  onConnect,
+  onDisconnect,
+}) {
+  const walletProvider = getActiveWalletProvider();
+  const [tradePage, setTradePage] = useState(1);
+  const [holderPage, setHolderPage] = useState(1);
+  const [payAmount, setPayAmount] = useState("");
+  const [swapDirection, setSwapDirection] = useState("buy");
+  const [selectedToken, setSelectedToken] = useState("");
+  const [tokenSearch, setTokenSearch] = useState("");
+  const [savedTokens, setSavedTokens] = useState([]);
+  const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
+  const [tokenData, setTokenData] = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartTimeframe, setChartTimeframe] = useState("1H");
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [tokenError, setTokenError] = useState("");
+  const [receiveAmount, setReceiveAmount] = useState("");
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteData, setQuoteData] = useState(null);
+  const [swapLoading, setSwapLoading] = useState(false);
+  const [swapError, setSwapError] = useState("");
+  const [swapSuccess, setSwapSuccess] = useState("");
+
+
+  const [ethBalance, setEthBalance] = useState(0n);
+  const [tokenBalance, setTokenBalance] = useState(0n);
+  const [tokenResolveLoading, setTokenResolveLoading] = useState(false);
+
+  const ROWS_PER_PAGE = 10;
+  const tokenStorageKey = (address) =>
+    `AELVORA_SWAP_TOKENS_${String(address || "").toLowerCase()}`;
+
+  const loadSavedTokens = async (address) => {
+    if (!address) {
+      setSavedTokens([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/swap/tokens?wallet=${encodeURIComponent(address)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to load saved tokens.");
+      }
+
+      const data = await response.json();
+
+      const tokens = Array.isArray(data?.tokens)
+        ? data.tokens
+        : [];
+
+      setSavedTokens(tokens);
+    } catch (error) {
+      console.error("[AELVORA] Saved token load failed:", error);
+      setSavedTokens([]);
+    }
+  };
+
+  const saveToken = async (data) => {
+    if (!walletAddress || !data?.token) return;
+
+    try {
+      const response = await fetch("/api/swap/tokens", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          wallet: walletAddress,
+          token: data.token,
+          symbol: data.symbol || "TOKEN",
+          name: data.name || data.symbol || "TOKEN",
+          decimals: Number(data.decimals ?? 18),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save token.");
+      }
+
+      const result = await response.json();
+
+      setSavedTokens(
+        Array.isArray(result?.tokens)
+          ? result.tokens
+          : []
+      );
+    } catch (error) {
+      console.error("[AELVORA] Saved token save failed:", error);
+    }
+  };
+
+  const deleteSavedToken = async (tokenAddress) => {
+    if (!walletAddress || !tokenAddress) return;
+
+    try {
+      const response = await fetch(
+        `/api/swap/tokens/${encodeURIComponent(tokenAddress)}?wallet=${encodeURIComponent(walletAddress)}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete token.");
+      }
+
+      const result = await response.json();
+
+      setSavedTokens(
+        Array.isArray(result?.tokens)
+          ? result.tokens
+          : []
+      );
+    } catch (error) {
+      console.error("[AELVORA] Saved token delete failed:", error);
+    }
+  };
+
+const updateSwapTokenUrl = (tokenAddress) => {
+    const ca = String(tokenAddress || "").trim();
+
+    if (!ca) {
+      window.history.replaceState({}, "", "/swap");
+      return;
+    }
+
+    const targetPath = `/swap/${ca.toLowerCase()}`;
+
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({}, "", targetPath);
+    }
+  };
+
+  const loadToken = async (rawAddress = tokenSearch, updateUrl = true) => {
+    const ca = String(rawAddress || "").trim();
+
+    setTokenError("");
+    setSwapError("");
+    setSwapSuccess("");
+
+    if (!ca) {
+      setTokenError("Enter a token contract address.");
+      return;
+    }
+
+    if (!isAddress(ca)) {
+      setTokenError("Invalid token contract address.");
+      return;
+    }
+
+    if (updateUrl) {
+      updateSwapTokenUrl(ca);
+    }
+
+    setTokenResolveLoading(true);
+    setTokenLoading(true);
+    setTokenData(null);
+    setQuoteData(null);
+    setReceiveAmount("");
+
+    try {
+      const data = await resolveAelvoraToken(ca);
+      setTokenData(data);
+      setSelectedToken(data.symbol || "TOKEN");
+      saveToken(data);
+      setTokenSearch("");
+    } catch (error) {
+      console.error("Aelvora token resolve failed:", error);
+      setTokenError(
+        error?.shortMessage ||
+        error?.message ||
+        "Token not found."
+      );
+    } finally {
+      setTokenResolveLoading(false);
+      setTokenLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadChart = async () => {
+      setChartLoading(true);
+
+      try {
+        if (!tokenData?.token) {
+          if (!cancelled) {
+            setChartData([]);
+          }
+
+          return;
+        }
+
+        /*
+         * ----------------------------------------------------
+         * AELVORA PRE-GRADUATION
+         * ----------------------------------------------------
+         * Bonding curve remains the source of truth.
+         */
+        if (
+          tokenData.isAelvora &&
+          tokenData.curve &&
+          !tokenData.isGraduated
+        ) {
+          const points = await getAelvoraCurveChart(
+            tokenData.curve
+          );
+
+          if (!cancelled) {
+            setChartData(
+              Array.isArray(points)
+                ? points
+                : []
+            );
+          }
+
+          return;
+        }
+
+        /*
+         * ----------------------------------------------------
+         * GRADUATED AELVORA + GLOBAL TOKEN
+         * ----------------------------------------------------
+         * Use the market pool behind DexScreener,
+         * but render the chart entirely inside AELVORA.
+         */
+        if (tokenData.token) {
+          const points = await getMarketChart(
+            tokenData.token,
+            tokenData.pairAddress,
+            chartTimeframe
+          );
+
+          if (!cancelled) {
+            const currentPrice = Number(
+              tokenData.price || 0
+            );
+
+            const historical = Array.isArray(points)
+              ? points
+              : [];
+
+            /*
+             * Add the current resolver price as a
+             * temporary live point when available.
+             *
+             * This stays only in React memory.
+             */
+            const withCurrent =
+              Number.isFinite(currentPrice) &&
+              currentPrice > 0
+                ? [
+                    ...historical,
+                    {
+                      type: "LIVE",
+                      timestamp: Math.floor(
+                        Date.now() / 1000
+                      ),
+                      price: currentPrice,
+                    },
+                  ]
+                : historical;
+
+            const deduped = [];
+            const seen = new Set();
+
+            for (const item of withCurrent) {
+              const timestamp = Number(
+                item?.timestamp
+              );
+
+              const price = Number(
+                item?.price
+              );
+
+              if (
+                !Number.isFinite(timestamp) ||
+                !Number.isFinite(price) ||
+                price <= 0
+              ) {
+                continue;
+              }
+
+              const key =
+                `${timestamp}:${price}`;
+
+              if (seen.has(key)) {
+                continue;
+              }
+
+              seen.add(key);
+
+              deduped.push({
+                type:
+                  item?.type || "MARKET",
+                timestamp,
+                price,
+              });
+            }
+
+            deduped.sort(
+              (a, b) =>
+                Number(a.timestamp) -
+                Number(b.timestamp)
+            );
+
+            setChartData(deduped);
+          }
+
+          return;
+        }
+
+        /*
+         * No market pool available.
+         * Do not fabricate chart history.
+         */
+        if (!cancelled) {
+          setChartData([]);
+        }
+      } catch (error) {
+        console.error(
+          "[AELVORA] Chart load failed:",
+          error
+        );
+
+        if (!cancelled) {
+          setChartData([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setChartLoading(false);
+        }
+      }
+    };
+
+    loadChart();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    tokenData?.token,
+    tokenData?.curve,
+    tokenData?.pairAddress,
+    tokenData?.isAelvora,
+    tokenData?.isGraduated,
+    tokenData?.price,
+    chartTimeframe,
+  ]);
+
+
+  const filteredChartData = useMemo(() => {
+    const source = Array.isArray(chartData)
+      ? chartData
+          .filter(
+            (item) =>
+              Number.isFinite(Number(item?.price)) &&
+              Number(item.price) > 0 &&
+              Number.isFinite(Number(item?.timestamp))
+          )
+          .sort(
+            (a, b) =>
+              Number(a.timestamp) -
+              Number(b.timestamp)
+          )
+      : [];
+
+    if (!source.length) {
+      return [];
+    }
+
+    const timeframeSeconds = {
+      "5m": 5 * 60,
+      "15m": 15 * 60,
+      "1H": 60 * 60,
+      "4H": 4 * 60 * 60,
+      "1D": 24 * 60 * 60,
+    };
+
+    const seconds =
+      timeframeSeconds[chartTimeframe] ||
+      timeframeSeconds["1H"];
+
+    const latestTimestamp = Number(
+      source[source.length - 1].timestamp
+    );
+
+    const cutoff =
+      latestTimestamp - seconds;
+
+    const filtered = source.filter(
+      (item) =>
+        Number(item.timestamp) >= cutoff
+    );
+
+    if (!filtered.length) {
+      return [source[source.length - 1]];
+    }
+
+    return filtered;
+  }, [chartData, chartTimeframe]);
+
+  const handleTokenSearchKeyDown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadToken();
+    }
+  };
+;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSavedTokens = async () => {
+      if (!walletAddress) {
+        if (!cancelled) {
+          setSavedTokens([]);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/swap/tokens?wallet=${encodeURIComponent(walletAddress)}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to load saved tokens.");
+        }
+
+        const data = await response.json();
+        const tokens = Array.isArray(data?.tokens)
+          ? data.tokens
+          : [];
+
+        if (!cancelled) {
+          setSavedTokens(tokens);
+        }
+      } catch (error) {
+        console.error("[AELVORA] Saved token restore failed:", error);
+
+        if (!cancelled) {
+          setSavedTokens([]);
+        }
+      }
+    };
+
+    restoreSavedTokens();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [walletAddress]);
+
+
+  useEffect(() => {
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const ca =
+      parts[0] === "swap" && parts[1]
+        ? parts[1]
+        : "";
+
+    if (ca) {
+      setTokenSearch(ca);
+      loadToken(ca, false);
+    }
+  }, []);
+
+  const refreshBalances = async () => {
+    if (!walletAddress || !isAddress(walletAddress)) {
+      setEthBalance(0n);
+      setTokenBalance(0n);
+      return;
+    }
+
+    try {
+      const eth = await publicClient.getBalance({
+        address: walletAddress,
+      });
+
+      setEthBalance(eth);
+
+      if (tokenData?.token) {
+        const token = await getTokenBalance(
+          tokenData.token,
+          walletAddress
+        );
+
+        setTokenBalance(token);
+      } else {
+        setTokenBalance(0n);
+      }
+    } catch (error) {
+      console.error("Wallet balance lookup failed:", error);
+      setEthBalance(0n);
+      setTokenBalance(0n);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      if (cancelled) return;
+      await refreshBalances();
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [walletAddress, tokenData]);
+
+
+  useEffect(() => {
+    if (
+      !tokenData ||
+      !payAmount ||
+      Number(payAmount) <= 0
+    ) {
+      setReceiveAmount("");
+      setQuoteData(null);
+      setQuoteLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    setQuoteLoading(true);
+    setSwapError("");
+    setSwapSuccess("");
+
+    const runQuote = async () => {
+      try {
+        let quote;
+
+        if (swapDirection === "buy") {
+          const ethWei = parseEther(payAmount);
+
+          if (tokenData.isAelvora && !tokenData.isGraduated) {
+            quote = await getBuyQuote(
+              tokenData.curve,
+              ethWei
+            );
+          } else if (
+            tokenData.isAelvora &&
+            tokenData.isGraduated
+          ) {
+            quote = await getV4BuyQuote(
+              tokenData.token,
+              ethWei
+            );
+          } else {
+            quote = await getV3BuyQuote(
+              tokenData.token,
+              ethWei
+            );
+          }
+        } else {
+          const tokenWei = parseUnits(
+            payAmount,
+            Number(tokenData.decimals || 18)
+          );
+
+          if (tokenData.isAelvora && !tokenData.isGraduated) {
+            quote = await getSellQuote(
+              tokenData.curve,
+              tokenWei
+            );
+          } else if (
+            tokenData.isAelvora &&
+            tokenData.isGraduated
+          ) {
+            quote = await getV4SellQuote(
+              tokenData.token,
+              tokenWei
+            );
+          } else {
+            quote = await getV3SellQuote(
+              tokenData.token,
+              tokenWei
+            );
+          }
+        }
+
+        if (cancelled) return;
+
+        const decimals =
+          swapDirection === "buy"
+            ? Number(tokenData.decimals || 18)
+            : 18;
+
+        const amountOut =
+          quote.amountOut ??
+          quote.tokensOut ??
+          quote.ethToSeller ??
+          quote.ethGross ??
+          0n;
+
+        const minimumReceived =
+          quote.minimumReceived ??
+          calculateMinimumReceived(amountOut);
+
+        setQuoteData({
+          ...quote,
+          amountOut,
+          minimumReceived,
+          decimals,
+        });
+
+        setReceiveAmount(
+          Number(
+            formatUnits(amountOut, decimals)
+          ).toLocaleString("en-US", {
+            maximumFractionDigits: 6,
+          })
+        );
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Quote failed:", error);
+          setReceiveAmount("");
+          setQuoteData(null);
+          setSwapError(
+            error?.shortMessage ||
+            error?.message ||
+            "Quote failed"
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setQuoteLoading(false);
+        }
+      }
+    };
+
+    runQuote();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [payAmount, tokenData, swapDirection]);
+
+
+  const displayPrice = tokenData
+    ? Number(tokenData.price || 0).toLocaleString("en-US", {
+        maximumFractionDigits: 12,
+      })
+    : "0.000123";
+
+  const minimumReceivedDisplay =
+    quoteData && tokenData
+      ? Number(
+          formatUnits(
+            quoteData.minimumReceived,
+            swapDirection === "buy"
+              ? tokenData.decimals
+              : 18
+          )
+        ).toLocaleString("en-US", {
+          maximumFractionDigits: 6,
+        })
+      : "--";
+
+  const routeDisplay = !tokenData
+    ? "--"
+    : tokenData.isAelvora
+      ? tokenData.isGraduated
+        ? "Uniswap V4"
+        : "Bonding Curve"
+      : "Uniswap V3";
+
+  const estimatedGasDisplay =
+    quoteData?.gasEstimate
+      ? quoteData.gasEstimate.toLocaleString("en-US")
+      : "--";
+
+  const ethBalanceDisplay = walletAddress
+    ? Number(formatEther(ethBalance)).toLocaleString("en-US", {
+        maximumFractionDigits: 6,
+      })
+    : "--";
+
+  const tokenBalanceDisplay =
+    walletAddress && tokenData
+      ? Number(
+          formatUnits(
+            tokenBalance,
+            Number(tokenData.decimals || 18)
+          )
+        ).toLocaleString("en-US", {
+          maximumFractionDigits: 6,
+        })
+      : "--";
+
+  const isSell = swapDirection === "sell";
+  const setMaxEthAmount = () => {
+    if (!walletAddress || ethBalance <= 0n) {
+      setPayAmount("");
+      return;
+    }
+
+    const gasReserve = 1_000_000_000_000n;
+    const amount =
+      ethBalance > gasReserve
+        ? ethBalance - gasReserve
+        : 0n;
+
+    setPayAmount(amount > 0n ? formatEther(amount) : "");
+  };
+
+  const setMaxTokenAmount = () => {
+    if (!tokenData || tokenBalance <= 0n) {
+      setPayAmount("");
+      return;
+    }
+
+    setPayAmount(
+      formatUnits(
+        tokenBalance,
+        Number(tokenData.decimals || 18)
+      )
+    );
+  };
+
+  const toggleSwapDirection = () => {
+    setSwapDirection((current) =>
+      current === "buy" ? "sell" : "buy"
+    );
+    setPayAmount("");
+    setReceiveAmount("");
+    setQuoteData(null);
+    setSwapError("");
+    setSwapSuccess("");
+  };
+
+  const executeSwap = async () => {
+    if (!walletAddress || !walletProvider) {
+      onConnect?.();
+      return;
+    }
+
+    const normalizedWalletChainId =
+      typeof walletChainId === "string"
+        ? Number(walletChainId)
+        : Number(walletChainId);
+
+    if (
+      !Number.isFinite(normalizedWalletChainId) ||
+      normalizedWalletChainId !== Number(ROBINHOOD_CHAIN_ID)
+    ) {
+      setSwapError(
+        "Please switch your wallet to Robinhood Chain."
+      );
+      return;
+    }
+
+    if (
+      !tokenData ||
+      !payAmount ||
+      Number(payAmount) <= 0
+    ) {
+      setSwapError(
+        isSell
+          ? "Enter a token amount first."
+          : "Enter an ETH amount first."
+      );
+      return;
+    }
+
+    if (!quoteData) {
+      setSwapError("Quote is not available yet.");
+      return;
+    }
+
+    setSwapLoading(true);
+    setSwapError("");
+    setSwapSuccess("");
+
+    try {
+      let txHash;
+
+      if (!isSell) {
+        const ethWei = parseEther(payAmount);
+
+        if (
+          tokenData.isAelvora &&
+          !tokenData.isGraduated
+        ) {
+          txHash = await executeCurveBuy({
+            provider: walletProvider,
+            account: walletAddress,
+            curveAddress: tokenData.curve,
+            ethGross: ethWei,
+          });
+        } else if (
+          tokenData.isAelvora &&
+          tokenData.isGraduated
+        ) {
+          txHash = await executeV4Buy({
+            provider: walletProvider,
+            account: walletAddress,
+            tokenAddress: tokenData.token,
+            ethGross: ethWei,
+            minimumReceived:
+              quoteData.minimumReceived,
+          });
+        } else {
+          txHash = await executeV3Buy({
+            provider: walletProvider,
+            account: walletAddress,
+            tokenAddress: tokenData.token,
+            ethGross: ethWei,
+            minimumReceived:
+              quoteData.minimumReceived,
+          });
+        }
+      } else {
+        const tokenWei = parseUnits(
+          payAmount,
+          Number(tokenData.decimals || 18)
+        );
+
+        if (
+          tokenData.isAelvora &&
+          !tokenData.isGraduated
+        ) {
+          txHash = await executeCurveSell({
+            provider: walletProvider,
+            account: walletAddress,
+            tokenAddress: tokenData.token,
+            curveAddress: tokenData.curve,
+            tokenAmount: tokenWei,
+          });
+        } else if (
+          tokenData.isAelvora &&
+          tokenData.isGraduated
+        ) {
+          txHash = await executeV4Sell({
+            provider: walletProvider,
+            account: walletAddress,
+            tokenAddress: tokenData.token,
+            tokenAmount: tokenWei,
+            minimumReceived:
+              quoteData.minimumReceived,
+          });
+        } else {
+          txHash = await executeV3Sell({
+            provider: walletProvider,
+            account: walletAddress,
+            tokenAddress: tokenData.token,
+            tokenAmount: tokenWei,
+            minimumReceived:
+              quoteData.minimumReceived,
+          });
+        }
+      }
+
+      await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+
+      await refreshBalances();
+
+      setSwapSuccess(
+        `Transaction confirmed: ${txHash.slice(
+          0,
+          10
+        )}...${txHash.slice(-8)}`
+      );
+
+      setPayAmount("");
+      setReceiveAmount("");
+      setQuoteData(null);
+    } catch (error) {
+      console.error("Swap failed:", error);
+      setSwapError(
+        error?.shortMessage ||
+        error?.message ||
+        "Swap failed"
+      );
+    } finally {
+      setSwapLoading(false);
+    }
+  };
+
+
+  const tradePages = Math.ceil(DEMO_TRADES.length / ROWS_PER_PAGE);
+  const holderPages = Math.ceil(DEMO_HOLDERS.length / ROWS_PER_PAGE);
+
+  const visibleTrades = useMemo(
+    () =>
+      DEMO_TRADES.slice(
+        (tradePage - 1) * ROWS_PER_PAGE,
+        tradePage * ROWS_PER_PAGE
+      ),
+    [tradePage]
+  );
+
+  const visibleHolders = useMemo(
+    () =>
+      DEMO_HOLDERS.slice(
+        (holderPage - 1) * ROWS_PER_PAGE,
+        holderPage * ROWS_PER_PAGE
+      ),
+    [holderPage]
+  );
+
+  return (
+    <div className="swap-page">
+      <header className="swap-navbar">
+        <button
+          type="button"
+          className="swap-brand"
+          onClick={onBack}
+          aria-label="AELVORA"
+        >
+          <img
+            src="/assets/logo-icon.svg"
+            alt=""
+            className="swap-brand-logo"
+          />
+
+          <span className="swap-brand-wordmark">
+            <strong>AELVORA</strong>
+            <small>APP</small>
+          </span>
+        </button>
+
+        <div className="swap-nav-right">
+          {walletAddress ? (
+            <div className="swap-wallet-actions">
+              <span className="swap-wallet-short">
+                {walletAddress.slice(0, 6)}...
+                {walletAddress.slice(-4)}
+              </span>
+
+              <button
+                type="button"
+                className="swap-disconnect-top"
+                onClick={onDisconnect}
+              >
+                Disconnect
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="swap-connect-top"
+              onClick={onConnect}
+            >
+              Connect Wallet
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main className="swap-main">
+        <button type="button" className="swap-back-home" onClick={onBack}>
+          ← Back to Home
+        </button>
+
+        <div className="swap-token-heading">
+          <div>
+            <span className="swap-eyebrow">AELVORA SWAP</span>
+            <h1>
+              {selectedToken ? `$${selectedToken}` : "$TOKEN"} <span>/ ETH</span>
+            </h1>
+          </div>
+
+          <div className="swap-price">
+            <small>Price</small>
+            <strong>{tokenData ? `${displayPrice} ETH` : "$0.000123"}</strong>
+          </div>
+        </div>
+
+        <section className="swap-top-grid">
+          <div className="swap-chart-card">
+            <div className="swap-chart-header">
+              <div>
+                <span>Price</span>
+                <strong>{tokenData ? `${displayPrice} ETH` : "$0.000123"}</strong>
+              </div>
+
+              
+            </div>
+
+            <div className="swap-chart">
+              <MiniChart
+                tokenAddress={tokenData?.token}
+                pairAddress={tokenData?.pairAddress}
+              />
+            </div>
+          </div>
+
+          <aside className="swap-card">
+            <div className="swap-card-title">
+              <span>Swap</span>
+              <span className="swap-network">ROBINHOOD</span>
+            </div>
+
+            <label className="swap-field-label">
+              You pay
+            </label>
+
+            <div className="swap-field">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="0.00"
+                value={payAmount}
+                onChange={(e) =>
+                  setPayAmount(e.target.value)
+                }
+              />
+
+              {isSell ? (
+                <>
+                  <button
+                    type="button"
+                    className="swap-token-select"
+                    disabled={!savedTokens.length}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setTokenDropdownOpen((open) => !open);
+                    }}
+                    title={
+                      savedTokens.length
+                        ? "Saved tokens"
+                        : "No saved tokens"
+                    }
+                  >
+                    {selectedToken || "Select token"} <span>▼</span>
+                  </button>
+
+                  {tokenDropdownOpen && savedTokens.length > 0 && (
+                    <div
+                      className="swap-saved-token-menu"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {savedTokens.map((saved) => (
+                        <div
+                          key={saved.token}
+                          className="swap-saved-token-row"
+                        >
+                          <button
+                            type="button"
+                            className="swap-saved-token-main"
+                            onClick={() => {
+                              setTokenDropdownOpen(false);
+                              loadToken(saved.token);
+                            }}
+                          >
+                            <span className="swap-saved-token-symbol">
+                              {saved.symbol || "TOKEN"}
+                            </span>
+
+                            <span className="swap-saved-token-address">
+                              {saved.token.slice(0, 6)}...
+                              {saved.token.slice(-4)}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="swap-saved-token-delete"
+                            aria-label={`Delete ${saved.symbol || "token"}`}
+                            title="Remove saved token"
+                            onClick={() => {
+                              deleteSavedToken(saved.token);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="swap-token-select"
+                  onClick={setMaxEthAmount}
+                  title="Use available ETH balance"
+                >
+                  ETH <span className="swap-max-label">MAX</span>
+                </button>
+              )}
+              
+            </div>
+
+            <div className="swap-balance">
+              <span>
+                {isSell
+                  ? `${selectedToken || "TOKEN"} balance`
+                  : "ETH balance"}
+              </span>
+
+              <strong>
+                {!walletAddress
+                  ? "--"
+                  : isSell
+                    ? tokenBalance > 0n
+                      ? `${tokenBalanceDisplay} ${selectedToken}`
+                      : "No balance"
+                    : `${ethBalanceDisplay} ETH`}
+              </strong>
+            </div>
+
+            <div className="swap-switch">
+              <button
+                type="button"
+                aria-label="Switch tokens"
+                onClick={toggleSwapDirection}
+                disabled={!tokenData}
+              >
+                ⇅
+              </button>
+            </div>
+
+            <label className="swap-field-label">
+              You receive
+            </label>
+
+            <div className="swap-field">
+              <input
+                type="text"
+                placeholder="0.00"
+                value={
+                  quoteLoading
+                    ? "Loading..."
+                    : receiveAmount
+                }
+                readOnly
+              />
+
+              {isSell ? (
+                <button
+                  type="button"
+                  className="swap-token-select"
+                  disabled
+                >
+                  ETH
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="swap-token-select"
+                    disabled={!savedTokens.length}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setTokenDropdownOpen((open) => !open);
+                    }}
+                    title={
+                      savedTokens.length
+                        ? "Saved tokens"
+                        : "No saved tokens"
+                    }
+                  >
+                    {selectedToken || "Select token"} <span>▼</span>
+                  </button>
+
+                  {tokenDropdownOpen && savedTokens.length > 0 && (
+                    <div
+                      className="swap-saved-token-menu"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {savedTokens.map((saved) => (
+                        <div
+                          key={saved.token}
+                          className="swap-saved-token-row"
+                        >
+                          <button
+                            type="button"
+                            className="swap-saved-token-main"
+                            onClick={() => {
+                              setTokenDropdownOpen(false);
+                              loadToken(saved.token);
+                            }}
+                          >
+                            <span className="swap-saved-token-symbol">
+                              {saved.symbol || "TOKEN"}
+                            </span>
+
+                            <span className="swap-saved-token-address">
+                              {saved.token.slice(0, 6)}...
+                              {saved.token.slice(-4)}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="swap-saved-token-delete"
+                            aria-label={`Delete ${saved.symbol || "token"}`}
+                            title="Remove saved token"
+                            onClick={() => {
+                              deleteSavedToken(saved.token);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="swap-balance">
+              <span>
+                {isSell
+                  ? "ETH balance"
+                  : `${selectedToken || "TOKEN"} balance`}
+              </span>
+
+              <strong>
+                {!walletAddress
+                  ? "--"
+                  : isSell
+                    ? `${ethBalanceDisplay} ETH`
+                    : tokenBalance > 0n
+                      ? `${tokenBalanceDisplay} ${selectedToken}`
+                      : "No balance"}
+              </strong>
+            </div>
+
+            <div className="swap-token-search">
+              <input
+                type="text"
+                placeholder="Token contract address"
+                value={tokenSearch}
+                onChange={(e) =>
+                  setTokenSearch(e.target.value)
+                }
+                onKeyDown={handleTokenSearchKeyDown}
+              />
+
+              <button
+                type="button"
+                className="swap-token-search-button"
+                onClick={() => loadToken()}
+                disabled={tokenResolveLoading}
+              >
+                {tokenResolveLoading
+                  ? "Loading..."
+                  : "Add Token"}
+              </button>
+            </div>
+
+            {tokenLoading && (
+              <div className="swap-live-status">
+                Adding token...
+              </div>
+            )}
+
+            {tokenError && (
+              <div className="swap-live-error">
+                {tokenError}
+              </div>
+            )}
+
+            {tokenData && (
+              <div className="swap-live-status">
+                {tokenData.isAelvora
+                  ? tokenData.isGraduated
+                    ? "Graduated • Uniswap V4"
+                    : `Bonding Curve • ${tokenData.ethReserveFormatted} ETH reserve`
+                  : `External Token • Uniswap V3`}
+              </div>
+            )}
+
+            <div className="swap-details">
+              <div>
+                <span>Route</span>
+                <strong>{routeDisplay}</strong>
+              </div>
+
+              <div>
+                <span>Minimum received</span>
+                <strong>{minimumReceivedDisplay}</strong>
+              </div>
+
+              <div>
+                <span>Network estimate</span>
+                <strong>{estimatedGasDisplay}</strong>
+              </div>
+            </div>
+
+            {swapError && (
+              <div className="swap-live-error">
+                {swapError}
+              </div>
+            )}
+
+            {swapSuccess && (
+              <div className="swap-live-status">
+                {swapSuccess}
+              </div>
+            )}
+
+            {walletAddress ? (
+              <button
+                type="button"
+                className="swap-main-button"
+                onClick={executeSwap}
+                disabled={
+                  swapLoading ||
+                  quoteLoading ||
+                  !tokenData ||
+                  !quoteData ||
+                  (isSell && tokenBalance <= 0n)
+                }
+              >
+                {swapLoading
+                  ? "Confirming..."
+                  : quoteLoading
+                    ? "Getting quote..."
+                    : isSell
+                      ? `Sell ${selectedToken || "TOKEN"}`
+                      : `Buy ${selectedToken || "TOKEN"}`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="swap-main-button"
+                onClick={onConnect}
+              >
+                Connect Wallet
+              </button>
+            )}
+
+            <p className="swap-note">
+              {tokenData?.isGlobal
+                ? "Global token loaded from DexScreener. Swap routing will be connected next."
+                : tokenData?.isGraduated
+                  ? "Graduated token routes through AELVORA Router → Uniswap V4."
+                  : "Token is still trading on the AELVORA bonding curve."}
+            </p>
+          </aside>
+        </section>
+
+        <section className="swap-data-grid">
+          <div className="swap-data-card">
+            <div className="swap-data-heading">
+              <div>
+                <span className="swap-eyebrow">ACTIVITY</span>
+                <h2>Recent Trades</h2>
+              </div>
+              <span className="swap-count">10 / page</span>
+            </div>
+
+            <div className="swap-table-wrap">
+              <table className="swap-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Wallet</th>
+                    <th>ETH</th>
+                    <th>Tokens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleTrades.map((trade, index) => (
+                    <tr key={`${trade.wallet}-${index}`}>
+                      <td>
+                        <span className={`swap-trade-type ${trade.type.toLowerCase()}`}>
+                          {trade.type}
+                        </span>
+                      </td>
+                      <td>{trade.wallet}</td>
+                      <td>{trade.amount}</td>
+                      <td>{trade.tokens}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Pagination
+              page={tradePage}
+              totalPages={tradePages}
+              onChange={setTradePage}
+            />
+          </div>
+
+          <div className="swap-data-card">
+            <div className="swap-data-heading">
+              <div>
+                <span className="swap-eyebrow">OWNERSHIP</span>
+                <h2>Holders</h2>
+              </div>
+              <span className="swap-count">10 / page</span>
+            </div>
+
+            <div className="swap-table-wrap">
+              <table className="swap-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Wallet</th>
+                    <th>Balance</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleHolders.map((holder) => (
+                    <tr key={holder.rank}>
+                      <td>{holder.rank}</td>
+                      <td>{holder.wallet}</td>
+                      <td>{holder.amount}</td>
+                      <td>{holder.share}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Pagination
+              page={holderPage}
+              totalPages={holderPages}
+              onChange={setHolderPage}
+            />
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}

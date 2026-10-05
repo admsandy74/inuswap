@@ -1,0 +1,47 @@
+export const SITE_CONFIG = {
+  brand: {
+    name: "AELVORA",
+    product: "Market",
+    fullName: "AELVORA Market",
+    tagline: "Launch. Trade. Evolve.",
+  },
+
+  hero: {
+    eyebrow: "DECENTRALIZED TOKEN MARKET",
+    title: "Build the next",
+    highlight: "market.",
+    description:
+      "A modern launchpad where creators can launch tokens, communities can discover new markets, and everyone can trade transparently.",
+    primaryCta: "Launch a Token",
+    secondaryCta: "Explore Market",
+  },
+
+  fees: {
+    protocol: 1,
+    creatorDefault: 2,
+    creatorMax: 5,
+    currency: "ETH",
+  },
+
+  contracts: {
+    factory: "",
+    router: "",
+    feeCollector: "",
+  },
+
+  links: {
+    x: "",
+    telegram: "",
+    discord: "",
+    docs: "",
+  },
+
+  theme: {
+    accent: "#00D395",
+    accentSoft: "#7CFFD7",
+    background: "#06100D",
+    surface: "#0A1713",
+    text: "#F3FFF9",
+    muted: "#91A89E",
+  },
+};

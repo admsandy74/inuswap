@@ -1,0 +1,54 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Hardhat generated files
+contracts/artifacts/
+contracts/cache/
+
+# Local backups
+backups/
+contracts/contracts/*.before-*
+contracts/test/*.before-*
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local backup files
+*.bak*
+*.before-*
+*.pre-v2
+*.v1.bak
+
+# Local vendored dependency
+/contracts/lib/permit2/
+
+# Runtime application data
+data/
+.vercel
+.env*

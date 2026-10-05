@@ -1,0 +1,639 @@
+import { useState } from "react";
+import { SITE_CONFIG } from "./config/site";
+import WalletModal from "./wallet/WalletModal";
+import {
+  getWalletChainId,
+  ROBINHOOD_CHAIN_ID,
+} from "./wallet/wallet";
+import "./index.css";
+
+const {
+  brand,
+  navigation,
+  hero,
+  platform,
+  launchpad,
+  fees,
+  social,
+  links,
+  cta,
+  theme,
+  background,
+  footer,
+} = SITE_CONFIG;
+
+function Logo() {
+  return (
+    <a className="brand" href="/" aria-label={brand.fullName}>
+      <img
+        src={brand.logo.icon}
+        alt=""
+        className="brand-logo"
+      />
+
+      <span className="brand-wordmark">
+        <strong>{brand.name}</strong>
+        <small>{brand.product}</small>
+      </span>
+    </a>
+  );
+}
+
+function Arrow() {
+  return <span className="arrow">↗</span>;
+}
+
+/*
+ * Main AELVORA visual.
+ * Logo yang dipakai selalu mengambil dari:
+ * SITE_CONFIG.brand.logo.icon
+ */
+function MarketMark({ large = false }) {
+  return (
+    <div
+      className={`market-mark ${
+        large ? "market-mark-large" : ""
+      }`}
+      aria-hidden="true"
+    >
+      <div className="mark-orbit mark-orbit-a" />
+      <div className="mark-orbit mark-orbit-b" />
+      <div className="mark-orbit mark-orbit-c" />
+
+      <div className="mark-core">
+        <img src={brand.logo.icon} alt="" />
+      </div>
+
+      <span className="mark-dot mark-dot-a" />
+      <span className="mark-dot mark-dot-b" />
+      <span className="mark-dot mark-dot-c" />
+    </div>
+  );
+}
+
+/*
+ * Discovery visual.
+ * Tidak lagi memakai lingkaran kosong yang terlihat seperti bug.
+ */
+function DiscoveryVisual() {
+  return (
+    <div className="discovery-visual" aria-hidden="true">
+      <div className="discovery-glow" />
+
+      <div className="discovery-ring discovery-ring-a" />
+      <div className="discovery-ring discovery-ring-b" />
+
+      <div className="discovery-core">
+        <img src={brand.logo.icon} alt="" />
+      </div>
+
+      <div className="discovery-node discovery-node-a">
+        <span>◇</span>
+      </div>
+
+      <div className="discovery-node discovery-node-b">
+        <span>↗</span>
+      </div>
+
+      <div className="discovery-node discovery-node-c">
+        <span>✦</span>
+      </div>
+
+      <div className="discovery-node discovery-node-d">
+        <span>◈</span>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [walletAddress, setWalletAddress] = useState(null);
+  const [walletProvider, setWalletProvider] = useState(null);
+  const [walletChainId, setWalletChainId] = useState(null);
+
+  return (
+    <div
+      className="site-shell"
+      style={{
+        "--accent": theme.accent,
+        "--accent-soft": theme.accentSoft,
+        "--bg": theme.background,
+        "--bg-alt": theme.backgroundAlt,
+        "--surface": theme.surface,
+        "--surface-alt": theme.surfaceAlt,
+        "--border": theme.border,
+        "--text": theme.text,
+        "--text-soft": theme.textSoft,
+        "--muted": theme.muted,
+      }}
+    >
+      {/* BACKGROUND */}
+      <div
+        className={`background-layer ${
+          background.animated
+            ? "background-animated"
+            : ""
+        }`}
+        style={{
+          backgroundImage: background.image
+            ? `linear-gradient(
+                rgba(6,16,13,.72),
+                rgba(6,16,13,.72)
+              ), url(${background.image})`
+            : background.gradient,
+        }}
+      />
+
+      {/* NAVBAR */}
+      <header className="navbar">
+        <Logo />
+
+        <nav className="nav-links">
+          {(navigation ?? []).map((item) => (
+            <a key={item.label} href={item.href}>
+              {item.label}
+            </a>
+          ))}
+        </nav>
+
+        {/* SOCIAL + CONNECT WALLET */}
+        <div className="navbar-actions">
+          {social.x && (
+            <a
+              className="social-button social-x"
+              href={social.x}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="AELVORA on X"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817-5.967 6.817H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
+              </svg>
+            </a>
+          )}
+
+          {social.telegram && (
+            <a
+              className="social-button social-telegram"
+              href={social.telegram}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="AELVORA on Telegram"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M21.7 3.3 2.9 10.55c-1.28.51-1.27 1.22-.23 1.54l4.82 1.5 1.85 5.62c.23.64.12.9.8.9.53 0 .76-.24 1.05-.52l2.33-2.26 4.84 3.57c.89.49 1.53.24 1.75-.83l3.15-14.86c.32-1.33-.51-1.94-1.56-1.41ZM8.23 13.25l10.95-6.91c.55-.34 1.06-.16.64.21l-8.91 8.04-.35 3.76-2.33-5.1Z" />
+              </svg>
+            </a>
+          )}
+
+          {cta.connectWallet.enabled && (
+            <button
+              className="wallet-button"
+              onClick={() => setWalletOpen(true)}
+            >
+              {walletAddress
+                ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+                : cta.connectWallet.label}
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main>
+        {/* =====================================================
+            HERO
+        ====================================================== */}
+        <section className="hero" id="top">
+          <div className="hero-copy">
+            <div className="eyebrow">
+              <span className="status-dot" />
+              {hero.eyebrow}
+            </div>
+
+            <h1>
+              {hero.title}
+              <br />
+              <span>{hero.highlight}</span>
+            </h1>
+
+            <p>{hero.description}</p>
+
+            <div className="hero-actions">
+              {cta.launch.enabled && (
+                <a
+                  className="button button-primary"
+                  href={cta.launch.href}
+                >
+                  {cta.launch.label}
+                  <Arrow />
+                </a>
+              )}
+
+              {cta.explore.enabled && (
+                <a
+                  className="button button-secondary"
+                  href={cta.explore.href}
+                >
+                  {cta.explore.label}
+                </a>
+              )}
+            </div>
+
+            <div className="hero-note">
+              <span>01</span>
+              Built around transparent on-chain mechanics.
+            </div>
+          </div>
+
+          <div className="hero-visual">
+            <MarketMark large />
+
+            <div className="visual-label">
+              <span>{hero.status.label}</span>
+              <strong>{hero.status.value}</strong>
+            </div>
+          </div>
+        </section>
+
+        {/* =====================================================
+            STATS
+        ====================================================== */}
+        <section className="stats">
+          <div>
+            <span>Protocol Fee</span>
+            <strong>{fees.protocol.default}%</strong>
+          </div>
+
+          <div>
+            <span>Creator Fee</span>
+            <strong>
+              {fees.creator.minimum}–
+              {fees.creator.maximum}%
+            </strong>
+          </div>
+
+          <div>
+            <span>Settlement</span>
+            <strong>{fees.currency}</strong>
+          </div>
+
+          <div>
+            <span>Liquidity</span>
+            <strong>
+              {launchpad.liquidity.mechanism}
+            </strong>
+          </div>
+        </section>
+
+        {/* =====================================================
+            LAUNCHPAD
+        ====================================================== */}
+        <section
+          className="section"
+          id="launchpad"
+        >
+          <div className="section-heading">
+            <div>
+              <span className="section-kicker">
+                01 / LAUNCHPAD
+              </span>
+
+              <h2>{launchpad.title}</h2>
+            </div>
+
+            <p>{launchpad.description}</p>
+          </div>
+
+          <div className="feature-grid">
+            {(platform.features ?? []).map(
+              (feature, index) => (
+                <article
+                  className={`feature-card ${
+                    index === 0
+                      ? "feature-large"
+                      : ""
+                  }`}
+                  key={feature.number}
+                >
+                  <span className="card-number">
+                    {feature.number}
+                  </span>
+
+                  <div className="card-icon">
+                    {index === 0
+                      ? "◇"
+                      : index === 1
+                      ? "↗"
+                      : "△"}
+                  </div>
+
+                  <h3>{feature.title}</h3>
+
+                  <p>{feature.description}</p>
+
+                  {index === 0 && (
+                    <a href="#launchpad">
+                      {launchpad.cta}
+                      <Arrow />
+                    </a>
+                  )}
+                </article>
+              )
+            )}
+          </div>
+        </section>
+
+        {/* =====================================================
+            MARKET / EXPLORE
+        ====================================================== */}
+        <section
+          className="market-section"
+          id="explore"
+        >
+          <div className="market-panel">
+            <div className="market-copy">
+              <span className="section-kicker">
+                {brand.fullName.toUpperCase()}
+              </span>
+
+              <h2>
+                Discover what is
+                <br />
+                moving next
+              </h2>
+
+              <p>
+                Explore emerging tokens launched
+                through the{" "}
+                {brand.fullName} ecosystem.
+              </p>
+            </div>
+
+            <DiscoveryVisual />
+
+            <a
+              className="button button-secondary market-button"
+              href="#explore"
+            >
+              {cta.explore.label}
+              <Arrow />
+            </a>
+          </div>
+        </section>
+
+        {/* =====================================================
+            HOW IT WORKS
+        ====================================================== */}
+        <section
+          className="section process-section"
+          id="how-it-works"
+        >
+          <div className="section-heading">
+            <div>
+              <span className="section-kicker">
+                02 / MECHANICS
+              </span>
+
+              <h2>
+                A simple path
+                <br />
+                Clear rules
+              </h2>
+            </div>
+
+            <p>
+              Every launch follows the same core
+              lifecycle, making the market easier to
+              understand and verify on-chain.
+            </p>
+          </div>
+
+          <div className="process">
+            <div className="process-line" />
+
+            <div className="process-step">
+              <span>01</span>
+              <strong>Create</strong>
+              <p>
+                Token is deployed through the
+                Launchpad.
+              </p>
+            </div>
+
+            <div className="process-step">
+              <span>02</span>
+              <strong>Bonding Curve</strong>
+              <p>
+                Users buy and sell while the market
+                develops.
+              </p>
+            </div>
+
+            <div className="process-step">
+              <span>03</span>
+              <strong>Graduation</strong>
+              <p>
+                The predefined target is reached.
+              </p>
+            </div>
+
+            <div className="process-step">
+              <span>04</span>
+              <strong>Liquidity</strong>
+              <p>
+                Liquidity moves to the defined DEX
+                mechanism and LP is permanently
+                burned.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* =====================================================
+            FEES
+        ====================================================== */}
+        <section
+          className="fee-section"
+          id="fees"
+        >
+          <div className="fee-copy">
+            <span className="section-kicker">
+              03 / FEE MODEL
+            </span>
+
+            <h2>
+              Simple fees
+              <br />
+              Transparent ownership
+            </h2>
+
+            <p>
+              AELVORA separates protocol revenue
+              from creator rewards. Trading fees are
+              settled in {fees.currency} and accounted
+              for by the smart contract.
+            </p>
+          </div>
+
+          <div className="fee-card">
+            <div className="fee-row">
+              <span>
+                {fees.protocol.label}
+              </span>
+
+              <strong>
+                {fees.protocol.default}%
+              </strong>
+            </div>
+
+            <div className="fee-row">
+              <span>
+                {fees.creator.label}
+              </span>
+
+              <strong>
+                {fees.creator.minimum}–
+                {fees.creator.maximum}%
+              </strong>
+            </div>
+
+            <div className="fee-divider" />
+
+            <div className="fee-row total">
+              <span>
+                Settlement Asset
+              </span>
+
+              <strong>
+                {fees.currency}
+              </strong>
+            </div>
+
+            <p className="fee-footnote">
+              Creator rewards are attributed to each
+              creator wallet and remain claimable only
+              by that creator.
+            </p>
+          </div>
+        </section>
+
+        {/* =====================================================
+            CTA
+        ====================================================== */}
+        <section className="cta-section">
+          <MarketMark />
+
+          <span className="section-kicker">
+            {brand.fullName.toUpperCase()}
+          </span>
+
+          <h2>
+            Build something
+            <br />
+            <span>worth trading</span>
+          </h2>
+
+          <div className="hero-actions">
+            <a
+              className="button button-primary"
+              href={cta.launch.href}
+            >
+              {cta.launch.label}
+              <Arrow />
+            </a>
+
+            <a
+              className="button button-secondary"
+              href="#how-it-works"
+            >
+              Read the Mechanics
+            </a>
+          </div>
+        </section>
+      </main>
+
+      {/* FOOTER */}
+      <footer>
+        <Logo />
+
+        <div className="footer-links">
+          {(navigation ?? []).map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+            >
+              {item.label}
+            </a>
+          ))}
+
+          {social.x && (
+            <a
+              href={social.x}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              X
+            </a>
+          )}
+
+          {social.telegram && (
+            <a
+              href={social.telegram}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Telegram
+            </a>
+          )}
+
+          {social.discord && (
+            <a
+              href={social.discord}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Discord
+            </a>
+          )}
+
+          {links.docs && (
+            <a
+              href={links.docs}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Docs
+            </a>
+          )}
+        </div>
+
+        <span className="copyright">
+          {footer.copyright}
+        </span>
+      </footer>
+
+      {walletOpen && (
+        <WalletModal
+          onClose={() => setWalletOpen(false)}
+          onConnected={(address, provider, chainId) => {
+            setWalletAddress(address);
+            setWalletProvider(provider);
+            setWalletChainId(chainId);
+          }}
+          onDisconnected={() => {
+            setWalletAddress(null);
+            setWalletProvider(null);
+            setWalletChainId(null);
+          }}
+          />
+      )}
+    </div>
+  );
+}

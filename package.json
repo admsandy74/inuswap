@@ -1,0 +1,38 @@
+{
+  "name": "aelvora-market",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js & vite --host 127.0.0.1",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "api": "node server.js"
+  },
+  "dependencies": {
+    "@binance/w3w-ethereum-provider": "1.1.13",
+    "@binance/w3w-utils": "1.1.8",
+    "@metamask/connect-evm": "^2.1.1",
+    "@okxconnect/universal-provider": "^1.9.1",
+    "@tanstack/react-query": "^5.102.8",
+    "@walletconnect/ethereum-provider": "2.25.0",
+    "buffer": "6.0.3",
+    "express": "^5.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "viem": "^2.56.5",
+    "wagmi": "^3.7.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.6",
+    "globals": "^17.12.0",
+    "vite": "^8.3.0"
+  }
+}

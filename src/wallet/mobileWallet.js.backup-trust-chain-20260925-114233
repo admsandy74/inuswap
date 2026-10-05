@@ -1,0 +1,265 @@
+import { EthereumProvider } from "@walletconnect/ethereum-provider";
+import { createEVMClient } from "@metamask/connect-evm";
+
+const ROBINHOOD_CHAIN_ID = 4663;
+const ROBINHOOD_RPC =
+  "https://rpc.mainnet.chain.robinhood.com";
+const ROBINHOOD_CHAIN_ID_HEX = "0x1237";
+
+const projectId =
+  import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
+
+let mobileProvider;
+
+let metamaskClient;
+
+async function createMetaMaskClient() {
+  if (metamaskClient) {
+    return metamaskClient;
+  }
+
+  metamaskClient = await createEVMClient({
+    dapp: {
+      name: "AELVORA Market",
+      url: "https://aelvoramarket.com",
+    },
+    api: {
+      supportedNetworks: {
+        "0x1237": ROBINHOOD_RPC,
+      },
+    },
+    mobile: {
+      useDeeplink: true,
+      preferredOpenLink: (url) => {
+        window.location.href = url;
+      },
+    },
+    ui: {
+      headless: true,
+      showInstallModal: false,
+    },
+    skipAutoAnnounce: true,
+  });
+
+  return metamaskClient;
+}
+
+async function connectMetaMaskMobile() {
+  const client = await createMetaMaskClient();
+
+  const result = await client.connect({
+    chainIds: [ROBINHOOD_CHAIN_ID_HEX],
+  });
+
+  const provider = client.getProvider();
+  const accounts = result?.accounts?.length
+    ? result.accounts
+    : await provider.request({
+        method: "eth_accounts",
+      });
+
+  let chainIdHex = await provider.request({
+    method: "eth_chainId",
+  });
+
+  if (chainIdHex.toLowerCase() !== ROBINHOOD_CHAIN_ID_HEX) {
+    try {
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: ROBINHOOD_CHAIN_ID_HEX }],
+      });
+    } catch (error) {
+      if (error?.code !== 4902) {
+        throw error;
+      }
+
+      await provider.request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: ROBINHOOD_CHAIN_ID_HEX,
+          chainName: "Robinhood Chain",
+          nativeCurrency: {
+            name: "Robinhood",
+            symbol: "RUSD",
+            decimals: 18,
+          },
+          rpcUrls: [ROBINHOOD_RPC],
+          blockExplorerUrls: [
+            "https://robinhoodchain.blockscout.com",
+          ],
+        }],
+      });
+
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: ROBINHOOD_CHAIN_ID_HEX }],
+      });
+    }
+
+    chainIdHex = await provider.request({
+      method: "eth_chainId",
+    });
+  }
+
+  mobileProvider = provider;
+
+  return {
+    address: accounts?.[0],
+    chainId: Number.parseInt(chainIdHex, 16),
+    provider,
+  };
+}
+
+async function connectTrustWalletMobile() {
+  if (!projectId) {
+    throw new Error(
+      "VITE_WALLETCONNECT_PROJECT_ID is not configured."
+    );
+  }
+
+  const provider = await EthereumProvider.init({
+    projectId,
+    chains: [ROBINHOOD_CHAIN_ID],
+    rpcMap: {
+      [ROBINHOOD_CHAIN_ID]: ROBINHOOD_RPC,
+    },
+    showQrModal: false,
+    metadata: {
+      name: "AELVORA Market",
+      description: "AELVORA Market",
+      url: "https://aelvoramarket.com",
+      icons: ["https://aelvoramarket.com/favicon.ico"],
+    },
+    disableProviderPing: true,
+  });
+
+  let openedTrust = false;
+
+  provider.on("display_uri", (uri) => {
+    if (openedTrust) return;
+    openedTrust = true;
+
+    const trustUrl =
+      "https://link.trustwallet.com/wc?uri=" +
+      encodeURIComponent(uri);
+
+    window.location.href = trustUrl;
+  });
+
+  await provider.connect({
+    chains: [ROBINHOOD_CHAIN_ID],
+  });
+
+  let accounts = await provider.request({
+    method: "eth_accounts",
+  });
+
+  if (!accounts?.length) {
+    const sessionAccounts =
+      provider?.session?.namespaces?.eip155?.accounts || [];
+
+    accounts = sessionAccounts
+      .map((account) => {
+        const parts = account.split(":");
+        return parts.length >= 3
+          ? parts.slice(2).join(":")
+          : null;
+      })
+      .filter(Boolean);
+  }
+
+  if (!accounts?.length) {
+    throw new Error(
+      "Trust Wallet connected, but no account was returned."
+    );
+  }
+
+  const chainIdHex = await provider.request({
+    method: "eth_chainId",
+  });
+
+  mobileProvider = provider;
+
+  return {
+    address: accounts[0],
+    chainId: Number.parseInt(chainIdHex, 16),
+    provider,
+  };
+}
+function createReownProvider() {
+  if (!projectId) {
+    throw new Error(
+      "VITE_WALLETCONNECT_PROJECT_ID is not configured."
+    );
+  }
+
+  return EthereumProvider.init({
+    projectId,
+    chains: [ROBINHOOD_CHAIN_ID],
+    rpcMap: {
+      [ROBINHOOD_CHAIN_ID]: ROBINHOOD_RPC,
+    },
+    showQrModal: true,
+    metadata: {
+      name: "AELVORA Market",
+      description: "AELVORA Market",
+      url: "https://aelvoramarket.com",
+      icons: ["https://aelvoramarket.com/favicon.ico"],
+    },
+  });
+}
+
+export async function connectMobileWallet() {
+  const provider = await createReownProvider();
+
+  await provider.connect({
+    chains: [ROBINHOOD_CHAIN_ID],
+  });
+
+  const accounts = await provider.request({
+    method: "eth_accounts",
+  });
+
+  const chainIdHex = await provider.request({
+    method: "eth_chainId",
+  });
+
+  mobileProvider = provider;
+
+  return {
+    address: accounts?.[0],
+    chainId: Number.parseInt(chainIdHex, 16),
+    provider,
+  };
+}
+
+export async function connectSpecificMobileWallet(walletId) {
+  if (walletId === "metamask") {
+    return connectMetaMaskMobile();
+  }
+
+  if (walletId === "trust") {
+    return connectTrustWalletMobile();
+  }
+
+  throw new Error(
+    `${walletId} mobile connection is not configured yet. Use More Wallets.`
+  );
+}
+
+export async function disconnectMobileWallet() {
+  if (!mobileProvider) return;
+
+  try {
+    await mobileProvider.disconnect();
+  } catch (error) {
+    console.warn(
+      "Mobile wallet disconnect failed:",
+      error?.message || error
+    );
+  }
+}
+
+export function isMobileWalletConfigured() {
+  return Boolean(projectId);
+}

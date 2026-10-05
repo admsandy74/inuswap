@@ -1,0 +1,142 @@
+import { useEffect, useState } from "react";
+import {
+  connectWallet,
+  discoverInjectedWallets,
+  getInjectedWallets,
+} from "./wallet";
+import "./wallet.css";
+
+export default function WalletModal({ onClose, onConnected }) {
+  const [wallets, setWallets] = useState([]);
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    discoverInjectedWallets();
+
+    const timer = setTimeout(() => {
+      setWallets(getInjectedWallets());
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  async function handleConnect(wallet) {
+    try {
+      setError("");
+      setConnecting(true);
+
+      const address = await connectWallet(wallet.provider);
+
+      if (address) {
+        onConnected?.(address);
+        onClose();
+      }
+    } catch (err) {
+      setError(
+        err?.message || "Failed to connect wallet."
+      );
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  return (
+    <div
+      className="wallet-modal-layer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Connect Wallet"
+    >
+      <div
+        className="wallet-modal-backdrop"
+        onClick={onClose}
+      />
+
+      <div className="wallet-modal">
+        <div className="wallet-modal-header">
+          <div>
+            <div className="wallet-modal-kicker">
+              AELVORA MARKET
+            </div>
+
+            <h2>Connect Wallet</h2>
+          </div>
+
+          <button
+            type="button"
+            className="wallet-modal-close"
+            onClick={onClose}
+            aria-label="Close wallet modal"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="wallet-modal-description">
+          Select a wallet extension to connect to
+          AELVORA Market.
+        </p>
+
+        {error && (
+          <div className="wallet-error">
+            {error}
+          </div>
+        )}
+
+        <div className="wallet-list">
+          {wallets.length === 0 ? (
+            <div className="wallet-empty">
+              <strong>No wallet detected</strong>
+
+              <p>
+                Install a compatible EVM wallet extension
+                and refresh the page.
+              </p>
+            </div>
+          ) : (
+            wallets.map((wallet) => (
+              <button
+                type="button"
+                className="wallet-option"
+                key={wallet.id}
+                disabled={connecting}
+                onClick={() => handleConnect(wallet)}
+              >
+                <span className="wallet-option-icon">
+                  {wallet.icon ? (
+                    <img
+                      src={wallet.icon}
+                      alt=""
+                    />
+                  ) : (
+                    "◈"
+                  )}
+                </span>
+
+                <span className="wallet-option-info">
+                  <strong>{wallet.name}</strong>
+
+                  <small>
+                    {connecting
+                      ? "Connecting..."
+                      : "Browser Extension"}
+                  </small>
+                </span>
+
+                <span className="wallet-option-arrow">
+                  →
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="wallet-modal-footer">
+          By connecting, you agree to interact with
+          AELVORA Market through your wallet.
+        </div>
+      </div>
+    </div>
+  );
+}
