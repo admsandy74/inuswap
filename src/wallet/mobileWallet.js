@@ -22,6 +22,46 @@ const projectId =
 
 let mobileProvider;
 
+let trustProviderPromise = null;
+
+function createTrustProvider() {
+  if (!projectId) {
+    return Promise.reject(
+      new Error(
+        "VITE_WALLETCONNECT_PROJECT_ID is not configured."
+      )
+    );
+  }
+
+  if (!trustProviderPromise) {
+    trustProviderPromise = EthereumProvider.init({
+      projectId,
+      chains: [BSC_CHAIN_ID],
+      rpcMap: {
+        [BSC_CHAIN_ID]: BSC_RPC,
+      },
+      showQrModal: false,
+      metadata: {
+        name: "INUSWAP",
+        description: "INUSWAP",
+        url: "https://inuswap.vercel.app",
+        icons: ["https://inuswap.vercel.app/favicon.ico"],
+      },
+      disableProviderPing: true,
+    }).catch((error) => {
+      trustProviderPromise = null;
+      throw error;
+    });
+  }
+
+  return trustProviderPromise;
+}
+
+export function warmupTrustWallet() {
+  if (!projectId) return;
+  void createTrustProvider().catch(() => {});
+}
+
 let metamaskClient;
 
 async function createMetaMaskClient() {
@@ -447,7 +487,6 @@ async function connectBinanceMobile() {
 }
 
 async function connectTrustWalletMobile() {
-  console.log("[TRUST DEBUG] connectTrustWalletMobile START", Date.now());
 
   if (!projectId) {
     throw new Error(
@@ -455,30 +494,11 @@ async function connectTrustWalletMobile() {
     );
   }
 
-  console.log("[TRUST DEBUG] before EthereumProvider.init", Date.now());
-
-  const provider = await EthereumProvider.init({
-    projectId,
-    chains: [BSC_CHAIN_ID],
-    rpcMap: {
-      [BSC_CHAIN_ID]: BSC_RPC,
-    },
-    showQrModal: false,
-    metadata: {
-      name: "INUSWAP",
-      description: "INUSWAP",
-      url: "https://inuswap.vercel.app",
-      icons: ["https://inuswap.vercel.app/favicon.ico"],
-    },
-    disableProviderPing: true,
-  });
-
-  console.log("[TRUST DEBUG] EthereumProvider.init DONE", Date.now());
+  const provider = await createTrustProvider();
 
   let openedTrust = false;
 
   provider.on("display_uri", (uri) => {
-    console.log("[TRUST DEBUG] display_uri", Date.now());
     if (openedTrust) return;
     openedTrust = true;
 
@@ -489,13 +509,9 @@ async function connectTrustWalletMobile() {
     window.location.href = trustUrl;
   });
 
-  console.log("[TRUST DEBUG] before provider.connect", Date.now());
-
   await provider.connect({
     chains: [BSC_CHAIN_ID],
   });
-
-  console.log("[TRUST DEBUG] provider.connect DONE", Date.now());
 
   let accounts = await provider.request({
     method: "eth_accounts",

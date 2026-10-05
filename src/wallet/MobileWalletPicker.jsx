@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import metamaskLogo from "../assets/wallets/metamask.svg";
 import okxLogo from "../assets/wallets/okx.png";
 import trustLogo from "../assets/wallets/trust.png";
@@ -7,6 +7,7 @@ import {
   connectSpecificMobileWallet,
   connectMobileWallet,
   isMobileWalletConfigured,
+  warmupTrustWallet,
 } from "./mobileWallet";
 
 const WALLETS = [
@@ -38,6 +39,10 @@ export default function MobileWalletPicker({
 }) {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    warmupTrustWallet();
+  }, []);
 
   async function handleWallet(wallet) {
     try {
