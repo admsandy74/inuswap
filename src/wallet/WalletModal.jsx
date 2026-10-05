@@ -47,6 +47,16 @@ export default function WalletModal({
 
     if (existingProvider) {
       activeProviderRef.current = existingProvider;
+
+      try {
+        const saved = JSON.parse(
+          localStorage.getItem("inuswap.wallet") || "null"
+        );
+
+        if (saved?.type && saved.type !== "injected") {
+          mobileWalletRef.current = true;
+        }
+      } catch {}
     }
 
     setError("");
@@ -70,6 +80,16 @@ export default function WalletModal({
 
           if (address) {
             setConnectedAddress(address);
+
+            try {
+              const saved = JSON.parse(
+                localStorage.getItem("inuswap.wallet") || "null"
+              );
+
+              if (saved?.type && saved.type !== "injected") {
+                mobileWalletRef.current = true;
+              }
+            } catch {}
           }
         } catch {}
       }
@@ -280,7 +300,7 @@ export default function WalletModal({
     );
   }
 
-  if (isMobileDevice()) {
+  if (isMobileDevice() && !connectedAddress) {
     return (
       <MobileWalletPicker
         onConnected={handleMobilePickerConnected}
