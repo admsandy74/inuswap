@@ -14,6 +14,7 @@ import {
   disconnectMobileWallet,
   isMobileWalletConfigured,
 } from "./mobileWallet";
+import MobileWalletPicker from "./MobileWalletPicker";
 import "./wallet.css";
 
 export default function WalletModal({
@@ -25,6 +26,7 @@ export default function WalletModal({
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
   const [connectedAddress, setConnectedAddress] = useState(null);
+  const [mobilePickerOpen, setMobilePickerOpen] = useState(false);
   const activeProviderRef = useRef(null);
   const mobileWalletRef = useRef(false);
 
@@ -178,55 +180,46 @@ export default function WalletModal({
     }
   }
 
-  async function handleMobileConnect() {
-    try {
-      setError("");
-      setConnecting(true);
-
-      if (!isMobileWalletConfigured()) {
-        throw new Error(
-          "Mobile wallet connection is not configured."
-        );
-      }
-
-      // Close AELVORA wallet modal before opening the mobile wallet picker.
-      if (onConnected) {
-        onConnected(null);
-      }
-
-      const result = await connectMobileWallet();
-
-      if (result?.address && result?.provider) {
-        activeProviderRef.current = result.provider;
-        mobileWalletRef.current = true;
-        setActiveWalletProvider(result.provider);
-        setConnectedAddress(result.address);
-
-        try {
-          localStorage.setItem(
-            "inuswap.wallet",
-            JSON.stringify({
-              type: result.walletType || "reown",
-              address: result.address,
-            })
-          );
-        } catch {}
-
-        if (onConnected) {
-          onConnected(
-            result.address,
-            result.provider,
-            result.chainId
-          );
-        }
-      }
-    } catch (err) {
+  function handleMobileConnect() {
+    if (!isMobileWalletConfigured()) {
       setError(
-        err?.message ||
-          "Failed to connect mobile wallet."
+        "Mobile wallet connection is not configured."
       );
-    } finally {
-      setConnecting(false);
+      return;
+    }
+
+    setError("");
+    setMobilePickerOpen(true);
+  }
+
+  async function handleMobilePickerConnected(
+    address,
+    provider,
+    chainId,
+    walletType
+  ) {
+    activeProviderRef.current = provider;
+    mobileWalletRef.current = true;
+    setActiveWalletProvider(provider);
+    setConnectedAddress(address);
+    setMobilePickerOpen(false);
+
+    try {
+      localStorage.setItem(
+        "inuswap.wallet",
+        JSON.stringify({
+          type: walletType || "reown",
+          address,
+        })
+      );
+    } catch {}
+
+    if (onConnected) {
+      onConnected(
+        address,
+        provider,
+        chainId
+      );
     }
   }
 
@@ -264,6 +257,17 @@ export default function WalletModal({
     if (onDisconnected) {
       onDisconnected();
     }
+  }
+
+  if (mobilePickerOpen) {
+    return (
+      <MobileWalletPicker
+        onConnected={handleMobilePickerConnected}
+        onClose={() =>
+          setMobilePickerOpen(false)
+        }
+      />
+    );
   }
 
   return (
