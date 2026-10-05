@@ -88,11 +88,43 @@
 
 .inu-network-warning {
   padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
   text-align: center;
   background: rgba(255,80,50,.08);
   border-bottom: 1px solid rgba(255,80,50,.15);
   color: #aaa;
   font-size: 10px;
+}
+
+.inu-network-switch {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(240,185,11,.45);
+  border-radius: 7px;
+  background: rgba(240,185,11,.12);
+  color: #f0b90b;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.inu-network-switch:hover:not(:disabled) {
+  background: rgba(240,185,11,.2);
+}
+
+.inu-network-switch:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.inu-network-error {
+  width: 100%;
+  color: #ff8a75;
+  font-size: 9px;
 }
 
 .inu-home {

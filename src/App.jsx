@@ -7,6 +7,7 @@ import {
   getActiveWalletProvider,
   getWalletChainId,
   getWalletBalance,
+  switchToBscChain,
 } from "./wallet/wallet";
 
 import {
@@ -49,6 +50,12 @@ export default function App() {
 
   const [chainId, setChainId] =
     useState(null);
+
+  const [switchingNetwork, setSwitchingNetwork] =
+    useState(false);
+
+  const [networkError, setNetworkError] =
+    useState("");
 
   const [page, setPage] =
     useState(
@@ -149,6 +156,30 @@ export default function App() {
     }, 250);
   }
 
+  async function handleSwitchToBsc() {
+    try {
+      setNetworkError("");
+      setSwitchingNetwork(true);
+
+      const provider = getActiveWalletProvider();
+
+      if (!provider) {
+        setWalletOpen(true);
+        return;
+      }
+
+      await switchToBscChain(provider);
+      await refreshWallet();
+    } catch (error) {
+      setNetworkError(
+        error?.message ||
+          "Failed to switch wallet to BNB Smart Chain."
+      );
+    } finally {
+      setSwitchingNetwork(false);
+    }
+  }
+
   const wrongNetwork =
     account &&
     chainId &&
@@ -200,8 +231,27 @@ export default function App() {
 
       {wrongNetwork && (
         <div className="inu-network-warning">
-          Please switch your wallet to
-          <strong> BNB Smart Chain</strong>.
+          <span>
+            Please switch your wallet to
+            <strong> BNB Smart Chain</strong>.
+          </span>
+
+          <button
+            type="button"
+            className="inu-network-switch"
+            onClick={handleSwitchToBsc}
+            disabled={switchingNetwork}
+          >
+            {switchingNetwork
+              ? "Switching..."
+              : "Switch Network"}
+          </button>
+
+          {networkError && (
+            <small className="inu-network-error">
+              {networkError}
+            </small>
+          )}
         </div>
       )}
 
