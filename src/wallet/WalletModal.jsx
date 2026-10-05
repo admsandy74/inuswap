@@ -13,6 +13,7 @@ import {
   connectMobileWallet,
   disconnectMobileWallet,
   isMobileWalletConfigured,
+  restoreMobileWalletSession,
 } from "./mobileWallet";
 import MobileWalletPicker from "./MobileWalletPicker";
 import "./wallet.css";
@@ -43,25 +44,88 @@ export default function WalletModal({
   useEffect(() => {
     discoverInjectedWallets();
 
-    const existingProvider = getActiveWalletProvider();
-
-    if (existingProvider) {
-      activeProviderRef.current = existingProvider;
-
+    const restoreWallet = async () => {
       try {
         const saved = JSON.parse(
           localStorage.getItem("inuswap.wallet") || "null"
         );
 
-        if (saved?.type && saved.type !== "injected") {
-          mobileWalletRef.current = true;
+        // Mobile session restore is silent.
+        // It must never open the wallet app again.
+        if (
+          isMobileDevice() &&
+          saved?.address &&
+          saved?.type &&
+          saved.type !== "injected"
+        ) {
+          const restored = await restoreMobileWalletSession(
+            saved.type,
+            saved.address
+          );
+
+          if (restored?.provider) {
+            const provider = restored.provider;
+
+            activeProviderRef.current = provider;
+            mobileWalletRef.current = true;
+            setActiveWalletProvider(provider);
+            setConnectedAddress(saved.address);
+
+            return provider;
+          }
         }
-      } catch {}
-    }
+      } catch (error) {
+        console.warn(
+          "[INUSWAP] WalletModal mobile restore failed:",
+          error?.message || error
+        );
+      }
+
+      return getActiveWalletProvider();
+    };
 
     setError("");
 
     const refreshWallets = async () => {
+      const restoredProvider = await restoreWallet();
+
+      if (restoredProvider) {
+        activeProviderRef.current = restoredProvider;
+      }
+
+      const detected = getInjectedWallets();
+      setWallets(detected);
+
+      const provider =
+        restoredProvider ||
+        getActiveWalletProvider();
+
+      if (provider) {
+        try {
+          const accounts =
+            await provider.request({
+              method: "eth_accounts",
+            });
+
+          const address =
+            accounts?.[0] ?? null;
+
+          if (address) {
+            setConnectedAddress(address);
+
+            try {
+              const saved = JSON.parse(
+                localStorage.getItem("inuswap.wallet") || "null"
+              );
+
+              if (saved?.type && saved.type !== "injected") {
+                mobileWalletRef.current = true;
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+    };
       const detected = getInjectedWallets();
       setWallets(detected);
 
