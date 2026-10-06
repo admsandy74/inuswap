@@ -115,13 +115,49 @@ export default function SwapPage() {
   const [message, setMessage] =
     useState("");
 
+  const [savedTokens, setSavedTokens] =
+    useState(() => {
+      try {
+        const stored = JSON.parse(
+          localStorage.getItem("inuswap_tokens") || "[]"
+        );
+
+        if (Array.isArray(stored)) {
+          return stored;
+        }
+      } catch {}
+
+      const legacy =
+        localStorage.getItem("inuswap_token_ca");
+
+      return legacy && isAddress(legacy)
+        ? [{ address: legacy }]
+        : [];
+    });
+
   const [tokenAddress, setTokenAddress] =
-    useState(
-      () =>
-        localStorage.getItem(
-          "inuswap_token_ca"
-        ) || ""
-    );
+    useState(() => {
+      try {
+        const stored = JSON.parse(
+          localStorage.getItem("inuswap_tokens") || "[]"
+        );
+
+        if (
+          Array.isArray(stored) &&
+          stored.length &&
+          isAddress(stored[0]?.address)
+        ) {
+          return stored[0].address;
+        }
+      } catch {}
+
+      const legacy =
+        localStorage.getItem("inuswap_token_ca");
+
+      return legacy && isAddress(legacy)
+        ? legacy
+        : "";
+    });
 
   const [tokenMeta, setTokenMeta] =
     useState(null);
@@ -160,17 +196,61 @@ export default function SwapPage() {
     : tokenBalance;
 
   useEffect(() => {
-    if (tokenAddress) {
-      localStorage.setItem(
-        "inuswap_token_ca",
-        tokenAddress
-      );
-    } else {
-      localStorage.removeItem(
-        "inuswap_token_ca"
-      );
+    localStorage.setItem(
+      "inuswap_tokens",
+      JSON.stringify(savedTokens)
+    );
+  }, [savedTokens]);
+
+  function addToken() {
+    const address = tokenAddress.trim();
+
+    if (!isAddress(address)) {
+      setCaStatus("Invalid token address");
+      return;
     }
-  }, [tokenAddress]);
+
+    const exists = savedTokens.some(
+      (token) =>
+        token.address.toLowerCase() === address.toLowerCase()
+    );
+
+    if (!exists) {
+      setSavedTokens((current) => [
+        ...current,
+        {
+          address,
+          name: tokenMeta?.name || "",
+          symbol: tokenMeta?.symbol || "",
+          decimals: tokenMeta?.decimals ?? null,
+        },
+      ]);
+    }
+
+    setTokenAddress(address);
+    setMessage("");
+  }
+
+  function deleteToken() {
+    if (!tokenAddress) return;
+
+    const remaining = savedTokens.filter(
+      (token) =>
+        token.address.toLowerCase() !==
+        tokenAddress.toLowerCase()
+    );
+
+    setSavedTokens(remaining);
+
+    setTokenAddress(
+      remaining[0]?.address || ""
+    );
+
+    setTokenMeta(null);
+    setAmount("");
+    setQuote(null);
+    setCaStatus("");
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -201,6 +281,20 @@ export default function SwapPage() {
         if (!cancelled) {
           setTokenMeta(metadata);
 
+          setSavedTokens((current) =>
+            current.map((token) =>
+              token.address.toLowerCase() ===
+              tokenAddress.toLowerCase()
+                ? {
+                    ...token,
+                    name: metadata.name,
+                    symbol: metadata.symbol,
+                    decimals: metadata.decimals,
+                  }
+                : token
+            )
+          );
+
           setCaStatus(
             `${metadata.symbol} · ${metadata.name} · ${metadata.decimals} decimals`
           );
@@ -229,7 +323,9 @@ export default function SwapPage() {
   }, [tokenAddress]);
 
   async function loadBalances() {
-    if (!provider || !tokenMeta) {
+    if (!provider) {
+      setBnbBalance(null);
+      setTokenBalance(null);
       return;
     }
 
@@ -242,30 +338,33 @@ export default function SwapPage() {
       const [account] =
         await walletClient.getAddresses();
 
-      const [
-        nativeBalance,
-        tokenBalanceRaw,
-      ] = await Promise.all([
-        publicClient.getBalance({
+      // BNB balance is independent from token metadata.
+      const nativeBalance =
+        await publicClient.getBalance({
           address: account,
-        }),
-
-        getTokenBalance(
-          tokenAddress,
-          account
-        ),
-      ]);
+        });
 
       setBnbBalance(
         formatEther(nativeBalance)
       );
 
-      setTokenBalance(
-        formatUnits(
-          tokenBalanceRaw,
-          tokenMeta.decimals
-        )
-      );
+      // Token balance only needs token metadata.
+      if (tokenMeta && isAddress(tokenAddress)) {
+        const tokenBalanceRaw =
+          await getTokenBalance(
+            tokenAddress,
+            account
+          );
+
+        setTokenBalance(
+          formatUnits(
+            tokenBalanceRaw,
+            tokenMeta.decimals
+          )
+        );
+      } else {
+        setTokenBalance(null);
+      }
     } catch (error) {
       console.warn(
         "Balance load failed:",
@@ -722,8 +821,65 @@ export default function SwapPage() {
 
         <div className="swap-ca-input">
           <label>
-            TOKEN CONTRACT ADDRESS
+            TOKEN
           </label>
+
+          <div className="swap-token-manager">
+            <select
+              value={tokenAddress}
+              onChange={(e) => {
+                setTokenAddress(e.target.value);
+                setAmount("");
+                setQuote(null);
+                setMessage("");
+              }}
+              disabled={busy}
+            >
+              <option value="">
+                Select token
+              </option>
+
+              {savedTokens.map((token) => (
+                <option
+                  key={token.address}
+                  value={token.address}
+                >
+                  {token.symbol ||
+                    token.name ||
+                    "TOKEN"}{" "}
+                  —{" "}
+                  {token.address.slice(0, 6)}
+                  ...
+                  {token.address.slice(-4)}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              className="token-manager-btn"
+              onClick={addToken}
+              disabled={
+                busy ||
+                !isAddress(tokenAddress)
+              }
+            >
+              + Add
+            </button>
+
+            <button
+              type="button"
+              className="token-manager-delete"
+              onClick={deleteToken}
+              disabled={
+                busy ||
+                !tokenAddress
+              }
+              title="Delete token"
+            >
+              ×
+            </button>
+          </div>
 
           <div className="swap-ca-row">
             <input
@@ -733,7 +889,7 @@ export default function SwapPage() {
                   e.target.value.trim()
                 )
               }
-              placeholder="0x..."
+              placeholder="Paste token contract address"
               disabled={busy}
             />
           </div>

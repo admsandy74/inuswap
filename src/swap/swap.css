@@ -363,3 +363,67 @@
 .swap-ca-input label {
   margin-bottom: 9px;
 }
+
+/* Token manager */
+.swap-token-manager {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.swap-token-manager select {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(240,185,11,.16);
+  border-radius: 7px;
+  background: #151515;
+  color: #ddd;
+  padding: 0 9px;
+  font-size: 10px;
+  outline: none;
+}
+
+.swap-token-manager select:focus {
+  border-color: rgba(240,185,11,.45);
+}
+
+.token-manager-btn,
+.token-manager-delete {
+  height: 34px;
+  border: 1px solid rgba(240,185,11,.18);
+  border-radius: 7px;
+  background: #151515;
+  color: #f0b90b;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.token-manager-btn:hover,
+.token-manager-delete:hover {
+  border-color: rgba(240,185,11,.45);
+}
+
+.token-manager-delete {
+  width: 34px;
+  padding: 0;
+  font-size: 17px;
+}
+
+.token-manager-btn:disabled,
+.token-manager-delete:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 500px) {
+  .swap-token-manager {
+    gap: 5px;
+  }
+
+  .token-manager-btn {
+    padding: 0 7px;
+  }
+}
