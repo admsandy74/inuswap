@@ -755,11 +755,6 @@ export default function SwapPage() {
           </span>
         </div>
 
-        <div className="swap-tax">
-          <span>Swap Fee</span>
-          <strong>0.25%</strong>
-        </div>
-
         <div className="swap-settings">
           <span>Slippage</span>
 

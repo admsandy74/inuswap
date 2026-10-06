@@ -353,3 +353,13 @@
     width: 78px;
   }
 }
+
+/* Token CA spacing */
+.swap-ca-input {
+  margin-top: 14px;
+  margin-bottom: 14px;
+}
+
+.swap-ca-input label {
+  margin-bottom: 9px;
+}
