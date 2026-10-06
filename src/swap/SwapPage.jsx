@@ -843,8 +843,7 @@ export default function SwapPage() {
       </section>
 
       <p className="swap-footer-note">
-        Powered by UniversalTaxRouter ·
-        PancakeSwap V2 · BNB Smart Chain
+        Powered by INUSWAP
       </p>
     </main>
   );
