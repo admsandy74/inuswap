@@ -84,33 +84,60 @@ export default function WalletModal({
       const detected = getInjectedWallets();
       setWallets(detected);
 
-      const provider =
-        getActiveWalletProvider();
+      // Restore the previously selected injected wallet
+      // after a browser refresh.
+      let saved = null;
 
-      if (provider) {
-        try {
-          const accounts =
-            await provider.request({
-              method: "eth_accounts",
-            });
+      try {
+        saved = JSON.parse(
+          localStorage.getItem("inuswap.wallet") || "null"
+        );
+      } catch {}
 
-          const address =
-            accounts?.[0] ?? null;
+      if (
+        saved?.type === "injected" &&
+        saved?.walletId
+      ) {
+        const restoredWallet = detected.find(
+          (wallet) =>
+            wallet.id === saved.walletId
+        );
 
-          if (address) {
-            setConnectedAddress(address);
+        if (restoredWallet?.provider) {
+          try {
+            const accounts =
+              await restoredWallet.provider.request({
+                method: "eth_accounts",
+              });
 
-            try {
-              const saved = JSON.parse(
-                localStorage.getItem("inuswap.wallet") || "null"
+            const address =
+              accounts?.[0] ?? null;
+
+            if (address) {
+              activeProviderRef.current =
+                restoredWallet.provider;
+
+              setActiveWalletProvider(
+                restoredWallet.provider
               );
 
-              if (saved?.type && saved.type !== "injected") {
-                mobileWalletRef.current = true;
+              setConnectedAddress(address);
+
+              if (onConnected) {
+                const chainId =
+                  await getWalletChainId(
+                    restoredWallet.provider
+                  );
+
+                onConnected(
+                  address,
+                  restoredWallet.provider,
+                  chainId
+                );
               }
-            } catch {}
-          }
-        } catch {}
+            }
+          } catch {}
+        }
       }
     };
 
@@ -344,7 +371,7 @@ export default function WalletModal({
         <div className="wallet-modal-header">
           <div>
             <div className="wallet-modal-kicker">
-              AELVORA MARKET
+              INUSWAP
             </div>
 
             <h2>
@@ -395,7 +422,7 @@ export default function WalletModal({
           <>
             <p className="wallet-modal-description">
               Select a wallet extension to connect to
-              AELVORA Market.
+              INUSWAP.
             </p>
 
             {error && (
@@ -491,7 +518,7 @@ export default function WalletModal({
 
         <div className="wallet-modal-footer">
           By connecting, you agree to interact with
-          AELVORA Market through your wallet.
+          INUSWAP through your wallet.
         </div>
       </div>
     </div>

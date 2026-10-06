@@ -3,6 +3,7 @@ import {
   createWalletClient,
   custom,
   http,
+  fallback,
   parseAbi,
 } from "viem";
 
@@ -32,9 +33,27 @@ export const TAX_ROUTER_ABI = parseAbi([
   "function swapExactTokensForETH(uint256,uint256,address[],address,uint256) returns (uint256[])",
 ]);
 
+const BSC_RPC_ENDPOINTS = [
+  "https://bsc-dataseed.bnbchain.org",
+  "https://bsc-dataseed-public.bnbchain.org",
+  "https://bsc-dataseed.nariox.org",
+  "https://bsc-dataseed.defibit.io",
+  "https://bsc-dataseed.ninicoin.io",
+];
+
 export const publicClient = createPublicClient({
   chain: bscChain,
-  transport: http(BSC_RPC),
+  transport: fallback(
+    BSC_RPC_ENDPOINTS.map((url) =>
+      http(url, {
+        timeout: 2500,
+      })
+    ),
+    {
+      rank: true,
+      retryCount: 1,
+    }
+  ),
 });
 
 export function getWalletClient(provider) {
