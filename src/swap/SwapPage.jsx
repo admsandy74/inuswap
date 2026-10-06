@@ -426,6 +426,19 @@ export default function SwapPage() {
       return;
     }
 
+    const slippageValue = Number(slippage);
+
+    if (
+      !Number.isFinite(slippageValue) ||
+      slippageValue <= 0 ||
+      slippageValue >= 100
+    ) {
+      setMessage(
+        "Slippage must be between 0.1% and 99%."
+      );
+      return;
+    }
+
     try {
       setBusy(true);
       setMessage("");
@@ -609,29 +622,6 @@ export default function SwapPage() {
           </div>
         </div>
 
-        <div className="swap-ca-input">
-          <label>
-            TOKEN CONTRACT ADDRESS
-          </label>
-
-          <div className="swap-ca-row">
-            <input
-              value={tokenAddress}
-              onChange={(e) =>
-                setTokenAddress(
-                  e.target.value.trim()
-                )
-              }
-              placeholder="0x..."
-              disabled={busy}
-            />
-          </div>
-
-          <div className="swap-ca-status">
-            {caStatus}
-          </div>
-        </div>
-
         <div className="swap-box">
           <div className="swap-box-head">
             <span>You Pay</span>
@@ -724,6 +714,29 @@ export default function SwapPage() {
           </div>
         </div>
 
+        <div className="swap-ca-input">
+          <label>
+            TOKEN CONTRACT ADDRESS
+          </label>
+
+          <div className="swap-ca-row">
+            <input
+              value={tokenAddress}
+              onChange={(e) =>
+                setTokenAddress(
+                  e.target.value.trim()
+                )
+              }
+              placeholder="0x..."
+              disabled={busy}
+            />
+          </div>
+
+          <div className="swap-ca-status">
+            {caStatus}
+          </div>
+        </div>
+
         <div className="swap-rate">
           <span>Rate</span>
 
@@ -743,7 +756,7 @@ export default function SwapPage() {
         </div>
 
         <div className="swap-tax">
-          <span>Router Tax</span>
+          <span>Swap Fee</span>
           <strong>0.25%</strong>
         </div>
 
@@ -771,6 +784,25 @@ export default function SwapPage() {
                 {value}%
               </button>
             ))}
+
+            <input
+              className="slippage-custom"
+              type="number"
+              min="0.1"
+              max="99"
+              step="0.1"
+              inputMode="decimal"
+              placeholder="Custom >5%"
+              value={
+                ["0.5", "1", "5"].includes(slippage)
+                  ? ""
+                  : slippage
+              }
+              onChange={(e) =>
+                setSlippage(e.target.value)
+              }
+              aria-label="Custom slippage percentage"
+            />
           </div>
         </div>
 
