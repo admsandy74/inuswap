@@ -647,7 +647,7 @@ export default function SwapPage() {
                   !tokenMeta
                 }
               >
-                MAX 99.99%
+                MAX
               </button>
             </span>
           </div>
