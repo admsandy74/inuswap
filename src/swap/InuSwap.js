@@ -13,6 +13,9 @@ import {
   PANCAKESWAP_V2_ROUTER,
 } from "../config/bsc.js";
 
+export const TAX_ROUTER_ADDRESS =
+  "0xEB129cc301c2e08D9fbf7978E4465e50A9cC3714";
+
 export const ERC20_ABI = parseAbi([
   "function name() view returns (string)",
   "function symbol() view returns (string)",
@@ -22,11 +25,11 @@ export const ERC20_ABI = parseAbi([
   "function approve(address,uint256) returns (bool)",
 ]);
 
-export const PANCAKESWAP_V2_ROUTER_ABI = parseAbi([
-  "function getAmountsOut(uint256 amountIn,address[] calldata path) view returns (uint256[] memory amounts)",
-  "function swapExactETHForTokens(uint256 amountOutMin,address[] calldata path,address to,uint256 deadline) payable returns (uint256[] memory amounts)",
-  "function swapExactTokensForETH(uint256 amountIn,uint256 amountOutMin,address[] calldata path,address to,uint256 deadline) returns (uint256[] memory amounts)",
-  "function swapExactTokensForTokens(uint256 amountIn,uint256 amountOutMin,address[] calldata path,address to,uint256 deadline) returns (uint256[] memory amounts)",
+export const TAX_ROUTER_ABI = parseAbi([
+  "function taxAmount(uint256) pure returns (uint256)",
+  "function getAmountsOutAfterTax(uint256,address[]) view returns (uint256,uint256,uint256,uint256[])",
+  "function swapExactETHForTokens(uint256,address[],address,uint256) payable returns (uint256[])",
+  "function swapExactTokensForETH(uint256,uint256,address[],address,uint256) returns (uint256[])",
 ]);
 
 export const publicClient = createPublicClient({
@@ -45,6 +48,32 @@ export function getWalletClient(provider) {
   });
 }
 
+export async function getTokenMetadata(token) {
+  const [name, symbol, decimals] = await Promise.all([
+    publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "name",
+    }),
+    publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "symbol",
+    }),
+    publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "decimals",
+    }),
+  ]);
+
+  return {
+    name,
+    symbol,
+    decimals: Number(decimals),
+  };
+}
+
 export async function getTokenBalance(token, account) {
   return publicClient.readContract({
     address: token,
@@ -59,7 +88,7 @@ export async function getTokenAllowance(token, owner) {
     address: token,
     abi: ERC20_ABI,
     functionName: "allowance",
-    args: [owner, PANCAKESWAP_V2_ROUTER],
+    args: [owner, TAX_ROUTER_ADDRESS],
   });
 }
 
@@ -71,17 +100,17 @@ export async function approveToken(provider, token, amount) {
     address: token,
     abi: ERC20_ABI,
     functionName: "approve",
-    args: [PANCAKESWAP_V2_ROUTER, amount],
+    args: [TAX_ROUTER_ADDRESS, amount],
     account,
     chain: bscChain,
   });
 }
 
-export async function getQuote(amountIn, path) {
+export async function getQuoteAfterTax(amountIn, path) {
   return publicClient.readContract({
-    address: PANCAKESWAP_V2_ROUTER,
-    abi: PANCAKESWAP_V2_ROUTER_ABI,
-    functionName: "getAmountsOut",
+    address: TAX_ROUTER_ADDRESS,
+    abi: TAX_ROUTER_ABI,
+    functionName: "getAmountsOutAfterTax",
     args: [amountIn, path],
   });
 }
@@ -90,13 +119,19 @@ export function calculateMinimumReceived(
   amountOut,
   slippageBps = 500n
 ) {
-  const BPS = 10_000n;
+  const BPS = 10000n;
 
-  if (slippageBps < 0n || slippageBps >= BPS) {
+  if (
+    slippageBps < 0n ||
+    slippageBps >= BPS
+  ) {
     throw new Error("Invalid slippage.");
   }
 
-  return (amountOut * (BPS - slippageBps)) / BPS;
+  return (
+    amountOut *
+    (BPS - slippageBps)
+  ) / BPS;
 }
 
 export {

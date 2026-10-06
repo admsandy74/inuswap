@@ -1,32 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
   formatEther,
   formatUnits,
   parseEther,
   parseUnits,
+  isAddress,
 } from "viem";
 
 import {
   publicClient,
   getWalletClient,
-  getQuote,
+  getQuoteAfterTax,
   getTokenBalance,
   getTokenAllowance,
   approveToken,
   calculateMinimumReceived,
-  PANCAKESWAP_V2_ROUTER,
+  TAX_ROUTER_ADDRESS,
+  TAX_ROUTER_ABI,
+  getTokenMetadata,
 } from "./InuSwap";
 
 import {
   WBNB,
+  bscChain,
 } from "../config/bsc";
-
-import {
-  INU_TOKEN_ADDRESS,
-  INU_TOKEN_SYMBOL,
-  INU_TOKEN_DECIMALS,
-  INU_TOKEN_IS_LIVE,
-} from "../config/inu";
 
 import {
   getActiveWalletProvider,
@@ -34,25 +32,38 @@ import {
 
 import "./swap.css";
 
-const ZERO =
-  "0x0000000000000000000000000000000000000000";
-
 function shortNumber(value, max = 6) {
-  if (value == null || !Number.isFinite(Number(value))) return "--";
+  if (
+    value == null ||
+    !Number.isFinite(Number(value))
+  ) {
+    return "--";
+  }
 
-  return Number(value).toLocaleString("en-US", {
-    maximumFractionDigits: max,
-  });
+  return Number(value).toLocaleString(
+    "en-US",
+    {
+      maximumFractionDigits: max,
+    }
+  );
 }
 
 function CopyButton({ value }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] =
+    useState(false);
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(value);
+      await navigator.clipboard.writeText(
+        value
+      );
+
       setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
+
+      setTimeout(
+        () => setCopied(false),
+        1200
+      );
     } catch {}
   }
 
@@ -68,58 +79,185 @@ function CopyButton({ value }) {
 }
 
 export default function SwapPage() {
-  const [direction, setDirection] = useState("BNB_TO_INU");
-  const [amount, setAmount] = useState("");
-  const [quote, setQuote] = useState(null);
-  const [bnbBalance, setBnbBalance] = useState(null);
-  const [inuBalance, setInuBalance] = useState(null);
-  const [slippage, setSlippage] = useState("5");
-  const [loadingQuote, setLoadingQuote] = useState(false);
-  const [loadingBalance, setLoadingBalance] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [direction, setDirection] =
+    useState("BNB_TO_TOKEN");
 
-  const provider = getActiveWalletProvider();
+  const [amount, setAmount] =
+    useState("");
 
-  const isBuy = direction === "BNB_TO_INU";
+  const [quote, setQuote] =
+    useState(null);
 
-  const path = useMemo(
-    () =>
-      isBuy
-        ? [WBNB, INU_TOKEN_ADDRESS]
-        : [INU_TOKEN_ADDRESS, WBNB],
-    [isBuy]
-  );
+  const [bnbBalance, setBnbBalance] =
+    useState(null);
 
-  const inputSymbol = isBuy ? "BNB" : INU_TOKEN_SYMBOL;
-  const outputSymbol = isBuy ? INU_TOKEN_SYMBOL : "BNB";
+  const [tokenBalance, setTokenBalance] =
+    useState(null);
+
+  const [slippage, setSlippage] =
+    useState("5");
+
+  const [loadingQuote, setLoadingQuote] =
+    useState(false);
+
+  const [loadingBalance, setLoadingBalance] =
+    useState(false);
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [message, setMessage] =
+    useState("");
+
+  const [tokenAddress, setTokenAddress] =
+    useState(
+      () =>
+        localStorage.getItem(
+          "inuswap_token_ca"
+        ) || ""
+    );
+
+  const [tokenMeta, setTokenMeta] =
+    useState(null);
+
+  const [caStatus, setCaStatus] =
+    useState("");
+
+  const provider =
+    getActiveWalletProvider();
+
+  const isBuy =
+    direction === "BNB_TO_TOKEN";
+
+  const path = useMemo(() => {
+    if (!tokenMeta) return [];
+
+    return isBuy
+      ? [WBNB, tokenAddress]
+      : [tokenAddress, WBNB];
+  }, [
+    isBuy,
+    tokenAddress,
+    tokenMeta,
+  ]);
+
+  const inputSymbol = isBuy
+    ? "BNB"
+    : tokenMeta?.symbol || "TOKEN";
+
+  const outputSymbol = isBuy
+    ? tokenMeta?.symbol || "TOKEN"
+    : "BNB";
+
+  const inputBalance = isBuy
+    ? bnbBalance
+    : tokenBalance;
+
+  useEffect(() => {
+    if (tokenAddress) {
+      localStorage.setItem(
+        "inuswap_token_ca",
+        tokenAddress
+      );
+    } else {
+      localStorage.removeItem(
+        "inuswap_token_ca"
+      );
+    }
+  }, [tokenAddress]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadToken() {
+      if (!isAddress(tokenAddress)) {
+        setTokenMeta(null);
+
+        setCaStatus(
+          tokenAddress
+            ? "Invalid token address"
+            : ""
+        );
+
+        return;
+      }
+
+      try {
+        setCaStatus(
+          "Loading token..."
+        );
+
+        const metadata =
+          await getTokenMetadata(
+            tokenAddress
+          );
+
+        if (!cancelled) {
+          setTokenMeta(metadata);
+
+          setCaStatus(
+            `${metadata.symbol} · ${metadata.name} · ${metadata.decimals} decimals`
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTokenMeta(null);
+
+          setCaStatus(
+            error?.shortMessage ||
+              "Unable to read token contract."
+          );
+        }
+      }
+    }
+
+    const timer = setTimeout(
+      loadToken,
+      300
+    );
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [tokenAddress]);
 
   async function loadBalances() {
-    if (!provider || !INU_TOKEN_IS_LIVE) return;
+    if (!provider || !tokenMeta) {
+      return;
+    }
 
     try {
       setLoadingBalance(true);
 
-      const walletClient = getWalletClient(provider);
-      const [account] = await walletClient.getAddresses();
+      const walletClient =
+        getWalletClient(provider);
 
-      const [nativeBalance, tokenBalance] =
-        await Promise.all([
-          publicClient.getBalance({
-            address: account,
-          }),
-          getTokenBalance(
-            INU_TOKEN_ADDRESS,
-            account
-          ),
-        ]);
+      const [account] =
+        await walletClient.getAddresses();
 
-      setBnbBalance(formatEther(nativeBalance));
+      const [
+        nativeBalance,
+        tokenBalanceRaw,
+      ] = await Promise.all([
+        publicClient.getBalance({
+          address: account,
+        }),
 
-      setInuBalance(
+        getTokenBalance(
+          tokenAddress,
+          account
+        ),
+      ]);
+
+      setBnbBalance(
+        formatEther(nativeBalance)
+      );
+
+      setTokenBalance(
         formatUnits(
-          tokenBalance,
-          INU_TOKEN_DECIMALS
+          tokenBalanceRaw,
+          tokenMeta.decimals
         )
       );
     } catch (error) {
@@ -134,14 +272,18 @@ export default function SwapPage() {
 
   useEffect(() => {
     loadBalances();
-  }, [provider]);
+  }, [
+    provider,
+    tokenAddress,
+    tokenMeta?.decimals,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadQuote() {
       if (
-        !INU_TOKEN_IS_LIVE ||
+        !tokenMeta ||
         !amount ||
         Number(amount) <= 0
       ) {
@@ -157,24 +299,30 @@ export default function SwapPage() {
           ? parseEther(amount)
           : parseUnits(
               amount,
-              INU_TOKEN_DECIMALS
+              tokenMeta.decimals
             );
 
-        const amounts = await getQuote(
-          parsedAmount,
-          path
-        );
+        const result =
+          await getQuoteAfterTax(
+            parsedAmount,
+            path
+          );
 
         if (!cancelled) {
           setQuote({
-            input: amounts[0],
+            input: result[0],
+            tax: result[1],
+            netInput: result[2],
             output:
-              amounts[amounts.length - 1],
+              result[3][
+                result[3].length - 1
+              ],
           });
         }
       } catch (error) {
         if (!cancelled) {
           setQuote(null);
+
           setMessage(
             error?.shortMessage ||
               error?.message ||
@@ -201,13 +349,44 @@ export default function SwapPage() {
     amount,
     direction,
     path,
+    tokenMeta,
   ]);
+
+  function setMax() {
+    if (
+      !inputBalance ||
+      !tokenMeta
+    ) {
+      return;
+    }
+
+    try {
+      const raw = isBuy
+        ? parseEther(inputBalance)
+        : parseUnits(
+            inputBalance,
+            tokenMeta.decimals
+          );
+
+      const max =
+        (raw * 9999n) / 10000n;
+
+      setAmount(
+        isBuy
+          ? formatEther(max)
+          : formatUnits(
+              max,
+              tokenMeta.decimals
+            )
+      );
+    } catch {}
+  }
 
   function switchDirection() {
     setDirection((value) =>
-      value === "BNB_TO_INU"
-        ? "INU_TO_BNB"
-        : "BNB_TO_INU"
+      value === "BNB_TO_TOKEN"
+        ? "TOKEN_TO_BNB"
+        : "BNB_TO_TOKEN"
     );
 
     setAmount("");
@@ -217,24 +396,33 @@ export default function SwapPage() {
 
   async function executeSwap() {
     if (!provider) {
-      setMessage("Connect your wallet first.");
-      return;
-    }
-
-    if (!INU_TOKEN_IS_LIVE) {
       setMessage(
-        "INU is not live yet. Trading is disabled."
+        "Connect your wallet first."
       );
       return;
     }
 
-    if (!amount || Number(amount) <= 0) {
-      setMessage("Enter an amount.");
+    if (!tokenMeta) {
+      setMessage(
+        "Enter a valid token contract address."
+      );
+      return;
+    }
+
+    if (
+      !amount ||
+      Number(amount) <= 0
+    ) {
+      setMessage(
+        "Enter an amount."
+      );
       return;
     }
 
     if (!quote) {
-      setMessage("Waiting for a quote.");
+      setMessage(
+        "Waiting for a quote."
+      );
       return;
     }
 
@@ -252,7 +440,7 @@ export default function SwapPage() {
         ? parseEther(amount)
         : parseUnits(
             amount,
-            INU_TOKEN_DECIMALS
+            tokenMeta.decimals
           );
 
       const minimumReceived =
@@ -269,7 +457,7 @@ export default function SwapPage() {
         BigInt(
           Math.floor(
             Date.now() / 1000
-          ) + 60 * 20
+          ) + 1200
         );
 
       let hash;
@@ -278,116 +466,70 @@ export default function SwapPage() {
         hash =
           await walletClient.writeContract({
             address:
-              PANCAKESWAP_V2_ROUTER,
-            abi: [
-              {
-                type: "function",
-                name:
-                  "swapExactETHForTokens",
-                stateMutability:
-                  "payable",
-                inputs: [
-                  {
-                    name:
-                      "amountOutMin",
-                    type: "uint256",
-                  },
-                  {
-                    name: "path",
-                    type: "address[]",
-                  },
-                  {
-                    name: "to",
-                    type: "address",
-                  },
-                  {
-                    name: "deadline",
-                    type: "uint256",
-                  },
-                ],
-                outputs: [
-                  {
-                    name: "amounts",
-                    type: "uint256[]",
-                  },
-                ],
-              },
-            ],
+              TAX_ROUTER_ADDRESS,
+
+            abi:
+              TAX_ROUTER_ABI,
+
             functionName:
               "swapExactETHForTokens",
+
             args: [
               minimumReceived,
               path,
               account,
               deadline,
             ],
+
             value: amountIn,
+
             account,
-            chain: undefined,
+
+            chain: bscChain,
           });
       } else {
         const allowance =
           await getTokenAllowance(
-            INU_TOKEN_ADDRESS,
+            tokenAddress,
             account
           );
 
-        if (allowance < amountIn) {
+        if (
+          allowance <
+          amountIn
+        ) {
           setMessage(
-            "Approve INU token in your wallet..."
+            "Approve token in your wallet..."
           );
 
-          await approveToken(
-            provider,
-            INU_TOKEN_ADDRESS,
-            amountIn
-          );
+          const approveHash =
+            await approveToken(
+              provider,
+              tokenAddress,
+              amountIn
+            );
+
+          await publicClient
+            .waitForTransactionReceipt({
+              hash: approveHash,
+            });
         }
+
+        setMessage(
+          "Confirm swap in your wallet..."
+        );
 
         hash =
           await walletClient.writeContract({
             address:
-              PANCAKESWAP_V2_ROUTER,
-            abi: [
-              {
-                type: "function",
-                name:
-                  "swapExactTokensForETH",
-                stateMutability:
-                  "nonpayable",
-                inputs: [
-                  {
-                    name: "amountIn",
-                    type: "uint256",
-                  },
-                  {
-                    name:
-                      "amountOutMin",
-                    type: "uint256",
-                  },
-                  {
-                    name: "path",
-                    type: "address[]",
-                  },
-                  {
-                    name: "to",
-                    type: "address",
-                  },
-                  {
-                    name: "deadline",
-                    type: "uint256",
-                  },
-                ],
-                outputs: [
-                  {
-                    name: "amounts",
-                    type: "uint256[]",
-                  },
-                ],
-              },
-            ],
+              TAX_ROUTER_ADDRESS,
+
+            abi:
+              TAX_ROUTER_ABI,
+
             functionName:
               "swapExactTokensForETH",
+
             args: [
               amountIn,
               minimumReceived,
@@ -395,18 +537,22 @@ export default function SwapPage() {
               account,
               deadline,
             ],
+
             account,
-            chain: undefined,
+
+            chain: bscChain,
           });
       }
 
       setMessage(
-        `Transaction submitted: ${hash}`
+        "Transaction submitted: " +
+          hash
       );
 
-      await publicClient.waitForTransactionReceipt({
-        hash,
-      });
+      await publicClient
+        .waitForTransactionReceipt({
+          hash,
+        });
 
       setMessage(
         "Swap confirmed successfully."
@@ -427,47 +573,64 @@ export default function SwapPage() {
     }
   }
 
-  const outputDisplay =
-    quote && isBuy
+  const outputDisplay = quote
+    ? isBuy
       ? formatUnits(
           quote.output,
-          INU_TOKEN_DECIMALS
+          tokenMeta.decimals
         )
-      : quote
-        ? formatEther(quote.output)
-        : "";
+      : formatEther(
+          quote.output
+        )
+    : "";
 
-  const inputBalance =
-    isBuy
-      ? bnbBalance
-      : inuBalance;
+  const rate =
+    quote && amount
+      ? Number(outputDisplay) /
+        Number(amount)
+      : null;
 
   return (
     <main className="inu-swap-page">
       <section className="inu-swap-card">
+
         <div className="swap-top">
           <div>
             <span className="swap-eyebrow">
               INUSWAP
             </span>
+
             <h1>Swap</h1>
           </div>
 
           <div className="swap-network">
             <span />
-            BSC
+            BSC MAINNET
           </div>
         </div>
 
-        {!INU_TOKEN_IS_LIVE && (
-          <div className="inu-coming-soon">
-            <strong>INU COMING SOON</strong>
-            <span>
-              Swap is disabled until the real
-              INU contract launches.
-            </span>
+        <div className="swap-ca-input">
+          <label>
+            TOKEN CONTRACT ADDRESS
+          </label>
+
+          <div className="swap-ca-row">
+            <input
+              value={tokenAddress}
+              onChange={(e) =>
+                setTokenAddress(
+                  e.target.value.trim()
+                )
+              }
+              placeholder="0x..."
+              disabled={busy}
+            />
           </div>
-        )}
+
+          <div className="swap-ca-status">
+            {caStatus}
+          </div>
+        </div>
 
         <div className="swap-box">
           <div className="swap-box-head">
@@ -481,6 +644,21 @@ export default function SwapPage() {
                     inputBalance,
                     6
                   )}
+
+              {" "}
+
+              <button
+                className="max-btn"
+                type="button"
+                onClick={setMax}
+                disabled={
+                  !inputBalance ||
+                  busy ||
+                  !tokenMeta
+                }
+              >
+                MAX 99.99%
+              </button>
             </span>
           </div>
 
@@ -488,13 +666,15 @@ export default function SwapPage() {
             <input
               value={amount}
               onChange={(e) =>
-                setAmount(e.target.value)
+                setAmount(
+                  e.target.value
+                )
               }
               inputMode="decimal"
               placeholder="0.0"
               disabled={
                 busy ||
-                !INU_TOKEN_IS_LIVE
+                !tokenMeta
               }
             />
 
@@ -516,6 +696,7 @@ export default function SwapPage() {
         <div className="swap-box">
           <div className="swap-box-head">
             <span>You Receive</span>
+
             <span>
               {loadingQuote
                 ? "Quoting..."
@@ -545,38 +726,51 @@ export default function SwapPage() {
 
         <div className="swap-rate">
           <span>Rate</span>
+
           <span>
-            {quote && amount
-              ? `1 ${inputSymbol} ≈ ${
-                  Number(outputDisplay) /
-                  Number(amount)
-                } ${outputSymbol}`
+            {rate
+              ? "1 " +
+                inputSymbol +
+                " ≈ " +
+                shortNumber(
+                  rate,
+                  8
+                ) +
+                " " +
+                outputSymbol
               : "--"}
           </span>
+        </div>
+
+        <div className="swap-tax">
+          <span>Router Tax</span>
+          <strong>0.25%</strong>
         </div>
 
         <div className="swap-settings">
           <span>Slippage</span>
 
           <div className="slippage-options">
-            {["0.5", "1", "5"].map(
-              (value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={
-                    slippage === value
-                      ? "selected"
-                      : ""
-                  }
-                  onClick={() =>
-                    setSlippage(value)
-                  }
-                >
-                  {value}%
-                </button>
-              )
-            )}
+            {[
+              "0.5",
+              "1",
+              "5",
+            ].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={
+                  slippage === value
+                    ? "selected"
+                    : ""
+                }
+                onClick={() =>
+                  setSlippage(value)
+                }
+              >
+                {value}%
+              </button>
+            ))}
           </div>
         </div>
 
@@ -586,14 +780,13 @@ export default function SwapPage() {
           onClick={executeSwap}
           disabled={
             busy ||
-            !INU_TOKEN_IS_LIVE
+            !tokenMeta ||
+            !quote
           }
         >
-          {!INU_TOKEN_IS_LIVE
-            ? "COMING SOON"
-            : busy
-              ? "SWAPPING..."
-              : "SWAP"}
+          {busy
+            ? "SWAPPING..."
+            : "SWAP"}
         </button>
 
         {message && (
@@ -604,20 +797,27 @@ export default function SwapPage() {
 
         <div className="inu-ca-box">
           <div>
-            <span>INU CONTRACT</span>
+            <span>
+              TOKEN CONTRACT
+            </span>
+
             <code>
-              {INU_TOKEN_ADDRESS}
+              {tokenAddress ||
+                "Enter token CA above"}
             </code>
           </div>
 
-          <CopyButton
-            value={INU_TOKEN_ADDRESS}
-          />
+          {tokenAddress && (
+            <CopyButton
+              value={tokenAddress}
+            />
+          )}
         </div>
       </section>
 
       <p className="swap-footer-note">
-        Powered by PancakeSwap V2 · BNB Smart Chain
+        Powered by UniversalTaxRouter ·
+        PancakeSwap V2 · BNB Smart Chain
       </p>
     </main>
   );
