@@ -49,6 +49,38 @@ export function getWalletClient(provider) {
 }
 
 export async function getTokenMetadata(token) {
+  // Fast path: GeckoTerminal
+  try {
+    const response = await fetch(
+      `https://api.geckoterminal.com/api/v2/networks/bsc/tokens/${token}`,
+      {
+        headers: {
+          Accept: "application/json;version=20230203",
+        },
+      }
+    );
+
+    if (response.ok) {
+      const json = await response.json();
+      const attributes = json?.data?.attributes;
+
+      if (
+        attributes?.name &&
+        attributes?.symbol &&
+        attributes?.decimals != null
+      ) {
+        return {
+          name: attributes.name,
+          symbol: attributes.symbol,
+          decimals: Number(attributes.decimals),
+        };
+      }
+    }
+  } catch {
+    // Fallback to BSC RPC below
+  }
+
+  // Fallback: direct RPC
   const [name, symbol, decimals] = await Promise.all([
     publicClient.readContract({
       address: token,
