@@ -97,6 +97,12 @@ export default function SwapPage() {
   const [slippage, setSlippage] =
     useState("5");
 
+  const [selectedPreset, setSelectedPreset] =
+    useState("5");
+
+  const [customSlippage, setCustomSlippage] =
+    useState("");
+
   const [loadingQuote, setLoadingQuote] =
     useState(false);
 
@@ -759,22 +765,20 @@ export default function SwapPage() {
           <span>Slippage</span>
 
           <div className="slippage-options">
-            {[
-              "0.5",
-              "1",
-              "5",
-            ].map((value) => (
+            {["0.5", "1", "5"].map((value) => (
               <button
                 key={value}
                 type="button"
                 className={
-                  slippage === value
+                  selectedPreset === value
                     ? "selected"
                     : ""
                 }
-                onClick={() =>
-                  setSlippage(value)
-                }
+                onClick={() => {
+                  setSelectedPreset(value);
+                  setSlippage(value);
+                  setCustomSlippage("");
+                }}
               >
                 {value}%
               </button>
@@ -782,20 +786,28 @@ export default function SwapPage() {
 
             <input
               className="slippage-custom"
-              type="number"
-              min="0.1"
-              max="99"
-              step="0.1"
+              type="text"
               inputMode="decimal"
-              placeholder="Custom >5%"
-              value={
-                ["0.5", "1", "5"].includes(slippage)
-                  ? ""
-                  : slippage
-              }
-              onChange={(e) =>
-                setSlippage(e.target.value)
-              }
+              placeholder="Custom"
+              value={customSlippage}
+              onFocus={() => {
+                setSelectedPreset(null);
+              }}
+              onChange={(e) => {
+                const value = e.target.value;
+
+                // Hanya izinkan angka + satu titik desimal
+                if (!/^\d{0,2}(\.\d{0,2})?$/.test(value)) {
+                  return;
+                }
+
+                setCustomSlippage(value);
+
+                if (value !== "") {
+                  setSelectedPreset(null);
+                  setSlippage(value);
+                }
+              }}
               aria-label="Custom slippage percentage"
             />
           </div>
