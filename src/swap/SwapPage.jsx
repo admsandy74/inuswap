@@ -323,7 +323,12 @@ export default function SwapPage() {
   }, [tokenAddress]);
 
   async function loadBalances() {
-    if (!provider) {
+    // Always fetch the CURRENT active provider.
+    // Wallet connection can change after this component renders.
+    const activeProvider =
+      getActiveWalletProvider();
+
+    if (!activeProvider) {
       setBnbBalance(null);
       setTokenBalance(null);
       return;
@@ -332,11 +337,10 @@ export default function SwapPage() {
     try {
       setLoadingBalance(true);
 
-      // Get the exact connected wallet address directly
-      // from the active wallet provider.
-      const accounts = await provider.request({
-        method: "eth_accounts",
-      });
+      const accounts =
+        await activeProvider.request({
+          method: "eth_accounts",
+        });
 
       const account = accounts?.[0];
 
@@ -348,7 +352,7 @@ export default function SwapPage() {
 
       // Read native BNB directly from the connected wallet provider.
       const nativeBalanceHex =
-        await provider.request({
+        await activeProvider.request({
           method: "eth_getBalance",
           params: [account, "latest"],
         });
@@ -388,9 +392,27 @@ export default function SwapPage() {
   }
 
   useEffect(() => {
-    loadBalances();
+    let cancelled = false;
+
+    async function refresh() {
+      if (!cancelled) {
+        await loadBalances();
+      }
+    }
+
+    refresh();
+
+    // Refresh wallet balances every 5 seconds.
+    const interval = setInterval(
+      refresh,
+      5000
+    );
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [
-    provider,
     tokenAddress,
     tokenMeta?.decimals,
   ]);
