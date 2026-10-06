@@ -37,7 +37,11 @@ function shortenAddress(address) {
 function Logo() {
   return (
     <a className="inu-logo" href="/">
-      <span className="inu-logo-mark">INU</span>
+      <img
+        src="/maskotinuswap.png"
+        alt="INUSWAP"
+        className="inu-logo-mark"
+      />
       <span className="inu-logo-text">
         INUSWAP
       </span>
