@@ -332,23 +332,35 @@ export default function SwapPage() {
     try {
       setLoadingBalance(true);
 
-      const walletClient =
-        getWalletClient(provider);
+      // Get the exact connected wallet address directly
+      // from the active wallet provider.
+      const accounts = await provider.request({
+        method: "eth_accounts",
+      });
 
-      const [account] =
-        await walletClient.getAddresses();
+      const account = accounts?.[0];
 
-      // BNB balance is independent from token metadata.
-      const nativeBalance =
-        await publicClient.getBalance({
-          address: account,
+      if (!account) {
+        setBnbBalance(null);
+        setTokenBalance(null);
+        return;
+      }
+
+      // Read native BNB directly from the connected wallet provider.
+      const nativeBalanceHex =
+        await provider.request({
+          method: "eth_getBalance",
+          params: [account, "latest"],
         });
+
+      const nativeBalance =
+        BigInt(nativeBalanceHex);
 
       setBnbBalance(
         formatEther(nativeBalance)
       );
 
-      // Token balance only needs token metadata.
+      // Token balance still comes from BSC RPC.
       if (tokenMeta && isAddress(tokenAddress)) {
         const tokenBalanceRaw =
           await getTokenBalance(
